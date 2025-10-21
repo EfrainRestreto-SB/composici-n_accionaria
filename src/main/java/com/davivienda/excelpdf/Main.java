@@ -146,7 +146,7 @@ public class Main {
         }
 
         // Solicitar entidad raíz interactivamente
-        System.out.println("🏢 Ingrese la entidad raíz para el análisis:");
+        System.out.println(" Ingrese la entidad raíz para el análisis:");
         System.out.print("   > ");
 
         try (Scanner scanner = new Scanner(System.in)) {
@@ -183,21 +183,21 @@ public class Main {
      */
     private static void printResults(ExcelOwnershipProcessor.ProcessingResult result) {
         System.out.println("");
-        System.out.println("✅ PROCESAMIENTO COMPLETADO EXITOSAMENTE");
+        System.out.println(" PROCESAMIENTO COMPLETADO EXITOSAMENTE");
         System.out.println("═".repeat(50));
         
-        System.out.println("📊 ESTADÍSTICAS:");
+        System.out.println(" ESTADÍSTICAS:");
         System.out.println("   " + result.getGraphStatistics());
         System.out.println("   Beneficiarios finales: " + result.getFinalResults().size());
         System.out.println("   Tiempo de procesamiento: " + result.getProcessingTime() + " ms");
         
         System.out.println("");
-        System.out.println("📄 ARCHIVO GENERADO:");
+        System.out.println(" ARCHIVO GENERADO:");
         System.out.println("   Ubicación: " + result.getOutputPdfPath());
         System.out.println("   Tamaño: " + formatFileSize(result.getPdfSize()));
         
         System.out.println("");
-        System.out.println("🏆 TOP 5 BENEFICIARIOS:");
+        System.out.println(" TOP 5 BENEFICIARIOS:");
         result.getFinalResults().entrySet().stream()
             .sorted(java.util.Map.Entry.<String, Double>comparingByValue().reversed())
             .limit(5)
@@ -209,7 +209,7 @@ public class Main {
             });
         
         System.out.println("");
-        System.out.println("🎉 ¡Análisis completado! Revise el archivo PDF para más detalles.");
+        System.out.println(" ¡Análisis completado! Revise el archivo PDF para más detalles.");
     }
 
     /**

@@ -1,14 +1,15 @@
 package com.davivienda.excelpdf.application;
 
-import com.davivienda.excelpdf.infrastructure.PdfOwnershipReportGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.davivienda.excelpdf.infrastructure.PdfOwnershipReportGenerator;
 
 /**
  * Procesador principal que coordina la lectura de Excel y generación de PDF
@@ -58,13 +59,13 @@ public class ExcelOwnershipProcessor {
         
         try {
             // Paso 1: Cargar datos desde Excel
-            logger.info("📂 Paso 1: Cargando datos desde Excel...");
+            logger.info(" Paso 1: Cargando datos desde Excel...");
             calculator.loadFromExcel(excelPath);
             resultBuilder.withGraphStatistics(calculator.getGraphStatistics());
-            logger.info("✅ Datos cargados exitosamente");
+            logger.info(" Datos cargados exitosamente");
             
             // Paso 2: Calcular participaciones finales
-            logger.info("🧮 Paso 2: Calculando participaciones finales...");
+            logger.info(" Paso 2: Calculando participaciones finales...");
             calculator.calculateFinalOwnership(rootEntity);
             
             Map<String, Double> finalResults = calculator.getFinalResults();
@@ -75,10 +76,10 @@ public class ExcelOwnershipProcessor {
                 .withBeneficiaryPaths(beneficiaryPaths)
                 .withRootEntity(rootEntity);
                 
-            logger.info("✅ Cálculos completados. Beneficiarios encontrados: {}", finalResults.size());
+            logger.info(" Cálculos completados. Beneficiarios encontrados: {}", finalResults.size());
             
             // Paso 3: Generar reporte PDF
-            logger.info("📄 Paso 3: Generando reporte PDF...");
+            logger.info(" Paso 3: Generando reporte PDF...");
             pdfGenerator.generateOwnershipReport(
                 finalResults, 
                 beneficiaryPaths, 
@@ -101,7 +102,7 @@ public class ExcelOwnershipProcessor {
                 .withOutputPdfPath(outputPdfPath)
                 .withPdfSize(pdfSize);
                 
-            logger.info("✅ PDF generado exitosamente. Tamaño: {} bytes", pdfSize);
+            logger.info(" PDF generado exitosamente. Tamaño: {} bytes", pdfSize);
             
             // Calcular tiempo total
             long processingTime = System.currentTimeMillis() - startTime;
@@ -117,7 +118,7 @@ public class ExcelOwnershipProcessor {
             return result;
             
         } catch (Exception e) {
-            logger.error("❌ Error durante el procesamiento: {}", e.getMessage(), e);
+            logger.error(" Error durante el procesamiento: {}", e.getMessage(), e);
             throw e;
         }
     }

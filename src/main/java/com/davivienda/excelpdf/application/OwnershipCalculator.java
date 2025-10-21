@@ -1,14 +1,21 @@
 package com.davivienda.excelpdf.application;
 
-import com.davivienda.excelpdf.domain.Node;
-import org.apache.poi.ss.usermodel.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.*;
+import com.davivienda.excelpdf.domain.Node;
 
 /**
  * Calculadora de participaciones accionarias que procesa archivos Excel
@@ -74,16 +81,24 @@ public class OwnershipCalculator {
                     // Extraer datos de las celdas
                     String entity = getCellStringValue(row.getCell(0));
                     String owner = getCellStringValue(row.getCell(1));
-                    double percentage = getCellNumericValue(row.getCell(2));
                     
-                    // Validar datos
+                    // Validar que entidad y accionista no estén vacíos antes de leer porcentaje
                     if (entity.isEmpty() || owner.isEmpty()) {
                         logger.warn("Fila {}: Entidad o Accionista vacío, saltando...", rowIndex + 1);
                         continue;
                     }
                     
+                    double percentage;
+                    try {
+                        percentage = getCellNumericValue(row.getCell(2));
+                    } catch (IllegalArgumentException e) {
+                        logger.warn("Fila {}: {}, saltando...", rowIndex + 1, e.getMessage());
+                        continue;
+                    }
+                    
+                    // Validar datos
                     if (percentage <= 0 || percentage > 100) {
-                        logger.warn("Fila {}: Porcentaje inválido ({}%), debe estar entre 0 y 100", rowIndex + 1, percentage);
+                        logger.warn("Fila {}: Porcentaje inválido ({}%), debe estar entre 0 y 100, saltando...", rowIndex + 1, percentage);
                         continue;
                     }
                     
@@ -122,13 +137,22 @@ public class OwnershipCalculator {
     private String getCellStringValue(Cell cell) {
         if (cell == null) return "";
         
-        switch (cell.getCellType()) {
+        CellType cellType = cell.getCellType();
+        
+        // Si es una fórmula, obtener el tipo de resultado evaluado
+        if (cellType == CellType.FORMULA) {
+            cellType = cell.getCachedFormulaResultType();
+        }
+        
+        switch (cellType) {
             case STRING:
                 return cell.getStringCellValue().trim();
             case NUMERIC:
                 return String.valueOf((long) cell.getNumericCellValue()).trim();
             case BOOLEAN:
                 return String.valueOf(cell.getBooleanCellValue()).trim();
+            case BLANK:
+                return "";
             default:
                 return "";
         }
@@ -138,18 +162,29 @@ public class OwnershipCalculator {
      * Obtiene el valor numérico de una celda.
      */
     private double getCellNumericValue(Cell cell) {
-        if (cell == null) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
             throw new IllegalArgumentException("Celda de porcentaje no puede estar vacía");
         }
         
-        switch (cell.getCellType()) {
+        CellType cellType = cell.getCellType();
+        
+        // Si es una fórmula, obtener el tipo de resultado evaluado
+        if (cellType == CellType.FORMULA) {
+            cellType = cell.getCachedFormulaResultType();
+        }
+        
+        switch (cellType) {
             case NUMERIC:
                 return cell.getNumericCellValue();
             case STRING:
+                String strValue = cell.getStringCellValue().trim();
+                if (strValue.isEmpty()) {
+                    throw new IllegalArgumentException("Celda de porcentaje no puede estar vacía");
+                }
                 try {
-                    return Double.parseDouble(cell.getStringCellValue().trim());
+                    return Double.parseDouble(strValue);
                 } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Valor de porcentaje inválido: " + cell.getStringCellValue());
+                    throw new IllegalArgumentException("Valor de porcentaje inválido: " + strValue);
                 }
             default:
                 throw new IllegalArgumentException("Tipo de celda no soportado para porcentaje: " + cell.getCellType());
