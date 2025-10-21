@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                             http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.davivienda</groupId>
+    <artifactId>composicion-accionaria</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>Composición Accionaria</name>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <exec.mainClass>com.davivienda.excelpdf.Main</exec.mainClass>
+        <openpdf.version>1.3.39</openpdf.version>
+        <poi.version>5.2.5</poi.version>
+        <slf4j.version>2.0.9</slf4j.version>
+        <junit.jupiter.version>5.10.1</junit.jupiter.version>
+        <graalvm.buildtools.version>0.10.1</graalvm.buildtools.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- Apache POI (lectura Excel .xlsx) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- OpenPDF (generación de PDF) -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>${openpdf.version}</version>
+        </dependency>
+
+        <!-- SLF4J API -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- SLF4J Simple binding (para logging básico) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <!-- Compilador Java -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+
+            <!-- Empaquetar como JAR ejecutable -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.7.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>${exec.mainClass}</mainClass>
+                        </manifest>
+                    </archive>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Plugin para ejecutar la aplicación -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>${exec.mainClass}</mainClass>
+                </configuration>
+            </plugin>
+
+            <!-- Plugin GraalVM para native-image (comentado hasta configurar GraalVM correctamente) -->
+            <!--
+            <plugin>
+                <groupId>org.graalvm.buildtools</groupId>
+                <artifactId>native-maven-plugin</artifactId>
+                <version>${graalvm.buildtools.version}</version>
+                <configuration>
+                    <imageName>composicion-accionaria</imageName>
+                    <mainClass>${exec.mainClass}</mainClass>
+                    <fallback>false</fallback>
+                    <verbose>true</verbose>
+                    <buildArgs>
+                        <buildArg>no-fallback</buildArg>
+                        <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                        <buildArg>enable-url-protocols=http,https</buildArg>
+                        <buildArg>enable-all-security-services</buildArg>
+                        <buildArg>-H:+UseServiceLoaderFeature</buildArg>
+                        <buildArg>allow-incomplete-classpath</buildArg>
+                        <buildArg>-H:+AddAllCharsets</buildArg>
+                        <buildArg>-H:IncludeResources=.*\.properties$</buildArg>
+                        <buildArg>-H:IncludeResources=META-INF/.*</buildArg>
+                    </buildArgs>
+                </configuration>
+            </plugin>
+            -->
+
+            <!-- Plugin para generar un JAR optimizado con CDS -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <echo message="Creando JAR optimizado para ejecución rápida..." />
+                                <copy file="${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar" 
+                                      tofile="${project.build.directory}/composicion-accionaria-optimizado.jar" />
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+    <profiles>
+
+        <!-- Perfil para compilar binario nativo -->
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${graalvm.buildtools.version}</version>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>composicion-accionaria</imageName>
+                            <mainClass>${exec.mainClass}</mainClass>
+                            <fallback>false</fallback>
+                            <verbose>true</verbose>
+                            <buildArgs>
+                                <buildArg>--no-fallback</buildArg>
+                                <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>--enable-url-protocols=http,https</buildArg>
+                                <buildArg>--enable-all-security-services</buildArg>
+                                <buildArg>-H:+UseServiceLoaderFeature</buildArg>
+                                <buildArg>--allow-incomplete-classpath</buildArg>
+                                <buildArg>-H:+AddAllCharsets</buildArg>
+                                <buildArg>-H:IncludeResources=.*\.properties$</buildArg>
+                                <buildArg>-H:IncludeResources=META-INF/.*</buildArg>
+                                <buildArg>-H:ConfigurationFileDirectories=src/main/resources/META-INF/native-image</buildArg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+    </profiles>
+
+</project>

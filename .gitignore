@@ -1,0 +1,203 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+
+# Eclipse
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+.project
+.externalToolBuilders/
+*.launch
+.pydevproject
+.cproject
+.autotools
+.factorypath
+.buildpath
+.target
+.tern-project
+.texlipse
+.springBeans
+.recommenders/
+.apt_generated/
+.apt_generated_test/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# GraalVM native image files
+*.exe
+graalvm-reachability-metadata/
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+#*#
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Copilot files (as requested)
+.copilot/
+*.copilot*
+copilot-*
+
+# Markdown files (as requested)
+*.md
+*.MD
+
+# PowerShell execution policy and temporary files
+*.ps1.bak
+$PROFILE
+.ps1
+
+# Native compilation artifacts
+native-image/
+*.o
+*.so
+*.dll
+*.dylib
+
+# Test output
+test-output/
+test-results/
+
+# Coverage reports
+*.exec
+jacoco.xml
+coverage/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# IDE specific files
+*.sublime-project
+*.sublime-workspace
+
+# JetBrains specific
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+
+# STS (Spring Tool Suite)
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# JIRA plugin
+atlassian-ide-plugin.xml
+
+# Crashlytics plugin (for Android Studio and IntelliJ)
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# Editor-based Rest Client
+.idea/httpRequests
+
+# Android studio 3.1+ serialized cache file
+.idea/caches/build_file_checksums.ser
+*.xlsx
