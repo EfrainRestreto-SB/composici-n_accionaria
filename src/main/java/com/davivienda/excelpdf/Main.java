@@ -3,7 +3,10 @@ package com.davivienda.excelpdf;
 import java.io.File;
 import java.util.Scanner;
 
+import javax.swing.SwingUtilities;
+
 import com.davivienda.excelpdf.application.ExcelOwnershipProcessor;
+import com.davivienda.excelpdf.ui.ComposicionAccionariaGUI;
 
 /**
  * Clase principal del proyecto de Composición Accionaria.
@@ -27,11 +30,18 @@ public class Main {
      * Método principal (punto de entrada del programa).
      */
     public static void main(String[] args) {
+        // Si no hay argumentos, lanzar interfaz gráfica
+        if (args.length == 0) {
+            launchGUI();
+            return;
+        }
+
+        // Modo consola
         printHeader();
 
         try {
             // Validar argumentos
-            if (args.length == 0) {
+            if (args.length < 1) {
                 printUsageAndExit();
                 return;
             }
@@ -269,5 +279,28 @@ public class Main {
         }
         bar.append("]");
         return bar.toString();
+    }
+
+    /**
+     * Lanza la interfaz gráfica (GUI)
+     */
+    private static void launchGUI() {
+        System.out.println("Iniciando interfaz gráfica...");
+        
+        // Configurar Look and Feel del sistema
+        try {
+            javax.swing.UIManager.setLookAndFeel(
+                javax.swing.UIManager.getSystemLookAndFeelClassName()
+            );
+        } catch (Exception e) {
+            // Si falla, usar el Look and Feel por defecto
+            System.err.println("No se pudo configurar el Look and Feel del sistema");
+        }
+
+        // Lanzar GUI en el Event Dispatch Thread
+        SwingUtilities.invokeLater(() -> {
+            ComposicionAccionariaGUI gui = new ComposicionAccionariaGUI();
+            gui.setVisible(true);
+        });
     }
 }
