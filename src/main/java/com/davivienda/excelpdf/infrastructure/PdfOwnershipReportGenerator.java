@@ -1,17 +1,30 @@
 package com.davivienda.excelpdf.infrastructure;
 
-import com.lowagie.text.*;
-import com.lowagie.text.pdf.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.awt.Color;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.lowagie.text.Chunk;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.Image;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
 
 /**
  * Generador de reportes PDF para análisis de composición accionaria.
@@ -76,28 +89,76 @@ public class PdfOwnershipReportGenerator {
     }
     
     /**
-     * Agrega el encabezado del documento.
+     * Agrega el encabezado del documento con logo.
      */
     private void addHeader(Document document, String rootEntity) throws DocumentException {
-        // Título principal
-        Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, DAVIVIENDA_RED);
-        Paragraph title = new Paragraph("ANÁLISIS DE COMPOSICIÓN ACCIONARIA", titleFont);
-        title.setAlignment(Element.ALIGN_CENTER);
-        title.setSpacingAfter(10);
-        document.add(title);
-        
-        // Subtítulo con entidad analizada
-        Font subtitleFont = FontFactory.getFont(FontFactory.HELVETICA, 14, Color.BLACK);
-        Paragraph subtitle = new Paragraph("Entidad Analizada: " + rootEntity, subtitleFont);
-        subtitle.setAlignment(Element.ALIGN_CENTER);
-        subtitle.setSpacingAfter(20);
-        document.add(subtitle);
+        try {
+            // Tabla para el encabezado (logo a la derecha, texto a la izquierda)
+            PdfPTable headerTable = new PdfPTable(2);
+            headerTable.setWidthPercentage(100);
+            headerTable.setWidths(new float[]{70, 30});
+            
+            // Celda izquierda: Títulos
+            PdfPCell leftCell = new PdfPCell();
+            leftCell.setBorder(PdfPCell.NO_BORDER);
+            
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, DAVIVIENDA_RED);
+            Paragraph title = new Paragraph("ANÁLISIS DE COMPOSICIÓN ACCIONARIA", titleFont);
+            title.setAlignment(Element.ALIGN_LEFT);
+            
+            Font subtitleFont = FontFactory.getFont(FontFactory.HELVETICA, 14, Color.BLACK);
+            Paragraph subtitle = new Paragraph("Entidad Analizada: " + rootEntity, subtitleFont);
+            subtitle.setAlignment(Element.ALIGN_LEFT);
+            subtitle.setSpacingBefore(5);
+            
+            leftCell.addElement(title);
+            leftCell.addElement(subtitle);
+            leftCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            
+            // Celda derecha: Logo
+            PdfPCell rightCell = new PdfPCell();
+            rightCell.setBorder(PdfPCell.NO_BORDER);
+            rightCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            
+            try {
+                // Intentar cargar el logo desde el directorio del JAR
+                String logoPath = "Imagen1.png";
+                File logoFile = new File(logoPath);
+                
+                if (logoFile.exists()) {
+                    Image logo = Image.getInstance(logoPath);
+                    // Ajustar tamaño del logo
+                    logo.scaleToFit(120, 60);
+                    logo.setAlignment(Element.ALIGN_RIGHT);
+                    rightCell.addElement(logo);
+                } else {
+                    logger.warn("Logo no encontrado en: {}", logoPath);
+                }
+            } catch (Exception e) {
+                logger.warn("No se pudo cargar el logo: {}", e.getMessage());
+            }
+            
+            headerTable.addCell(leftCell);
+            headerTable.addCell(rightCell);
+            
+            document.add(headerTable);
+            
+        } catch (Exception e) {
+            logger.error("Error agregando encabezado con logo: {}", e.getMessage());
+            // Fallback al encabezado simple
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, DAVIVIENDA_RED);
+            Paragraph title = new Paragraph("ANÁLISIS DE COMPOSICIÓN ACCIONARIA", titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            document.add(title);
+        }
         
         // Fecha de generación
         Font dateFont = FontFactory.getFont(FontFactory.HELVETICA, 10, HEADER_GRAY);
         Paragraph date = new Paragraph("Fecha de Generación: " + LocalDateTime.now().format(DATE_FORMAT), dateFont);
         date.setAlignment(Element.ALIGN_RIGHT);
         date.setSpacingAfter(30);
+        date.setSpacingBefore(10);
         document.add(date);
         
         // Línea separadora
@@ -256,5 +317,16 @@ public class PdfOwnershipReportGenerator {
         pageNumber.setSpacingBefore(10);
         
         document.add(pageNumber);
+        
+        // Pie de página corporativo
+        Font copyrightFont = FontFactory.getFont(FontFactory.TIMES_ROMAN, 10, Color.BLACK);
+        Paragraph copyright = new Paragraph(
+            "Banco Davivienda (Panamá) S.A. Todos los derechos reservados – 2023. Banco Davivienda ©",
+            copyrightFont
+        );
+        copyright.setAlignment(Element.ALIGN_CENTER);
+        copyright.setSpacingBefore(15);
+        
+        document.add(copyright);
     }
 }
