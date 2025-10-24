@@ -22,8 +22,12 @@ import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.ColumnText;
+import com.lowagie.text.pdf.PdfContentByte;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfPageEventHelper;
 import com.lowagie.text.pdf.PdfWriter;
 
 /**
@@ -62,8 +66,11 @@ public class PdfOwnershipReportGenerator {
         logger.info("Generando reporte PDF: {}", outputPath);
         
         try {
-            Document document = new Document(PageSize.A4, 50, 50, 50, 50);
+            Document document = new Document(PageSize.A4, 50, 50, 50, 70);
             PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(outputPath));
+            
+            // Configurar evento para pie de página
+            writer.setPageEvent(new FooterPageEvent());
             
             // Configurar metadatos
             document.addTitle("Análisis de Composición Accionaria - " + rootEntity);
@@ -128,8 +135,8 @@ public class PdfOwnershipReportGenerator {
                 
                 if (logoFile.exists()) {
                     Image logo = Image.getInstance(logoPath);
-                    // Ajustar tamaño del logo
-                    logo.scaleToFit(120, 60);
+                    // Ajustar tamaño del logo (escalado al 30%)
+                    logo.scalePercent(30);
                     logo.setAlignment(Element.ALIGN_RIGHT);
                     rightCell.addElement(logo);
                 } else {
@@ -317,16 +324,33 @@ public class PdfOwnershipReportGenerator {
         pageNumber.setSpacingBefore(10);
         
         document.add(pageNumber);
-        
-        // Pie de página corporativo
-        Font copyrightFont = FontFactory.getFont(FontFactory.TIMES_ROMAN, 10, Color.BLACK);
-        Paragraph copyright = new Paragraph(
-            "Banco Davivienda (Panamá) S.A. Todos los derechos reservados – 2023. Banco Davivienda ©",
-            copyrightFont
-        );
-        copyright.setAlignment(Element.ALIGN_CENTER);
-        copyright.setSpacingBefore(15);
-        
-        document.add(copyright);
+    }
+    
+    /**
+     * Clase interna para manejar el evento de pie de página.
+     */
+    private static class FooterPageEvent extends PdfPageEventHelper {
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            try {
+                Rectangle page = document.getPageSize();
+                PdfContentByte canvas = writer.getDirectContent();
+                
+                // Crear el texto del pie de página
+                Font copyrightFont = FontFactory.getFont(FontFactory.TIMES_ROMAN, 10, Color.BLACK);
+                Phrase footer = new Phrase("Banco Davivienda (Panamá) S.A. Todos los derechos reservados – 2023. Banco Davivienda ©", copyrightFont);
+                
+                // Posicionar el pie de página en la parte inferior
+                ColumnText.showTextAligned(canvas, 
+                    Element.ALIGN_CENTER, 
+                    footer, 
+                    page.getWidth() / 2, 
+                    30, // 30 puntos desde el borde inferior
+                    0);
+                    
+            } catch (Exception e) {
+                // Silenciosamente ignorar errores en el pie de página
+            }
+        }
     }
 }
