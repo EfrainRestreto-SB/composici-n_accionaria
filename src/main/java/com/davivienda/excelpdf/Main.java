@@ -64,10 +64,13 @@ public class Main {
             System.out.println("   PDF salida    : " + outputPdfPath);
             System.out.println("─".repeat(50));
 
+            // Aplicar correcciones automáticas al Excel si es necesario
+            String correctedExcelPath = applyExcelCorrections(excelPath);
+
             // Ejecutar el procesamiento principal
             ExcelOwnershipProcessor processor = new ExcelOwnershipProcessor();
             ExcelOwnershipProcessor.ProcessingResult result =
-                    processor.processOwnershipAnalysis(excelPath, rootEntity, outputPdfPath);
+                    processor.processOwnershipAnalysis(correctedExcelPath, rootEntity, outputPdfPath);
 
             // Mostrar resultados finales
             printResults(result);
@@ -302,5 +305,76 @@ public class Main {
             ComposicionAccionariaGUI gui = new ComposicionAccionariaGUI();
             gui.setVisible(true);
         });
+    }
+    
+    // ============================================================
+    // ============ SECCIÓN: CORRECCIONES AUTOMÁTICAS =============
+    // ============================================================
+    
+    /**
+     * Aplica correcciones automáticas al archivo Excel si es necesario.
+     * Por ejemplo, unifica entidades DRA BLUE con nombres similares.
+     */
+    private static String applyExcelCorrections(String originalExcelPath) {
+        try {
+            // Verificar si el archivo necesita correcciones
+            if (!needsCorrections(originalExcelPath)) {
+                System.out.println("   ✓ Excel no requiere correcciones automáticas");
+                return originalExcelPath;
+            }
+            
+            System.out.println("   🔧 Aplicando correcciones automáticas al Excel...");
+            
+            // Generar ruta del archivo corregido
+            String correctedPath = originalExcelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+            
+            // Ejecutar el script de corrección usando ProcessBuilder
+            ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue.py");
+            pb.directory(new File("."));
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            
+            if (exitCode == 0) {
+                // Verificar que el archivo corregido existe
+                File correctedFile = new File(correctedPath);
+                if (correctedFile.exists()) {
+                    System.out.println("   ✓ Correcciones aplicadas exitosamente: " + correctedFile.getName());
+                    return correctedPath;
+                } else {
+                    System.out.println("   ⚠ Archivo corregido no encontrado, usando original");
+                    return originalExcelPath;
+                }
+            } else {
+                System.out.println("   ⚠ Error en corrección automática, usando archivo original");
+                return originalExcelPath;
+            }
+            
+        } catch (Exception e) {
+            System.out.println("   ⚠ Error aplicando correcciones: " + e.getMessage());
+            System.out.println("   📋 Usando archivo original sin correcciones");
+            return originalExcelPath;
+        }
+    }
+    
+    /**
+     * Verifica si el archivo Excel necesita correcciones automáticas.
+     * Detecta casos conocidos como entidades DRA BLUE duplicadas.
+     */
+    private static boolean needsCorrections(String excelPath) {
+        // Verificar si ya existe una versión corregida
+        String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+        File correctedFile = new File(correctedPath);
+        
+        // Si ya existe el archivo corregido y es más reciente, no necesita correcciones
+        File originalFile = new File(excelPath);
+        if (correctedFile.exists() && 
+            correctedFile.lastModified() >= originalFile.lastModified()) {
+            return false;
+        }
+        
+        // Para simplificar, siempre aplicamos correcciones para data.xlsx
+        return excelPath.contains("data.xlsx");
     }
 }

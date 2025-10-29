@@ -9,9 +9,14 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * Interfaz gráfica para el análisis de composición accionaria
@@ -292,6 +297,22 @@ public class ComposicionAccionariaGUI extends JFrame {
                     progressBar.setValue(40);
                 }
 
+                // Aplicar correcciones automáticas si es necesario
+                String archivoOriginal = archivoExcel;
+                publish("\nVerificando si el Excel necesita correcciones...");
+                publish("Archivo a procesar: " + archivoExcel);
+                progressBar.setValue(45);
+                
+                String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
+                if (!archivoCorregido.equals(archivoExcel)) {
+                    publish("🔧 Correcciones automáticas aplicadas");
+                    publish("Archivo original: " + archivoOriginal);
+                    publish("Archivo corregido: " + archivoCorregido);
+                    archivoExcel = archivoCorregido;
+                } else {
+                    publish("ℹ️ No se requieren correcciones para este archivo");
+                }
+                
                 // Procesar análisis
                 publish("\nIniciando análisis de composición accionaria...");
                 progressBar.setValue(50);
@@ -430,6 +451,96 @@ public class ComposicionAccionariaGUI extends JFrame {
         if (bytes < 1024) return bytes + " bytes";
         if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
         return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+    }
+
+    /**
+     * Aplica correcciones automáticas al Excel si es necesario
+     */
+    private String aplicarCorreccionesAutomaticas(String excelPath) {
+        try {
+            appendLog("🔍 Evaluando necesidad de correcciones para: " + excelPath);
+            
+            boolean needsCorrections = necesitaCorrecciones(excelPath);
+            appendLog("¿Necesita correcciones? " + needsCorrections);
+            
+            if (needsCorrections) {
+                appendLog("🔧 Aplicando correcciones automáticas al Excel...");
+                
+                ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue.py");
+                pb.directory(new File(System.getProperty("user.dir")));
+                
+                Process process = pb.start();
+                
+                // Leer la salida del proceso
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    appendLog("Python: " + line);
+                }
+                
+                int exitCode = process.waitFor();
+                if (exitCode == 0) {
+                    String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+                    if (new File(correctedPath).exists()) {
+                        appendLog("✅ Correcciones aplicadas exitosamente: " + new File(correctedPath).getName());
+                        appendLog("📁 Archivo corregido en: " + correctedPath);
+                        return correctedPath;
+                    } else {
+                        appendLog("❌ Error: El archivo corregido no se generó");
+                    }
+                } else {
+                    appendLog("⚠️ Error en correcciones automáticas (código: " + exitCode + "), usando archivo original");
+                }
+            } else {
+                appendLog("ℹ️ El archivo no necesita correcciones automáticas");
+            }
+        } catch (Exception e) {
+            appendLog("⚠️ Error aplicando correcciones: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return excelPath;
+    }
+
+    /**
+     * Verifica si el Excel necesita correcciones
+     */
+    private boolean necesitaCorrecciones(String excelPath) {
+        try {
+            Path path = Paths.get(excelPath);
+            String fileName = path.getFileName().toString();
+            
+            appendLog("🔍 Verificando archivo: " + fileName);
+            
+            // Solo aplicar correcciones a data.xlsx
+            if (fileName.equals("data.xlsx")) {
+                Path correctedPath = Paths.get(excelPath.replace(".xlsx", "_cleaned_fixed.xlsx"));
+                
+                appendLog("📁 Buscando archivo corregido: " + correctedPath.getFileName());
+                
+                // Si no existe el archivo corregido, necesita correcciones
+                if (!Files.exists(correctedPath)) {
+                    appendLog("❗ No existe archivo corregido, SE REQUIEREN correcciones");
+                    return true;
+                }
+                
+                // Si el archivo original es más nuevo que el corregido, necesita correcciones
+                boolean isNewer = Files.getLastModifiedTime(path).compareTo(Files.getLastModifiedTime(correctedPath)) > 0;
+                if (isNewer) {
+                    appendLog("📅 Archivo original es más nuevo, SE REQUIEREN correcciones");
+                } else {
+                    appendLog("✅ Archivo corregido está actualizado");
+                }
+                return isNewer;
+            } else {
+                appendLog("ℹ️ No es data.xlsx, no se requieren correcciones");
+            }
+        } catch (Exception e) {
+            appendLog("❌ Error verificando necesidad de correcciones: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
     }
 
     /**
