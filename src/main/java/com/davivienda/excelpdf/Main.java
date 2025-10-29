@@ -1,6 +1,8 @@
 package com.davivienda.excelpdf;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.util.Scanner;
 
 import javax.swing.SwingUtilities;
@@ -329,11 +331,20 @@ public class Main {
             String correctedPath = originalExcelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
             
             // Ejecutar el script de corrección usando ProcessBuilder
-            ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue.py");
+            ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue_dynamic.py", originalExcelPath);
             pb.directory(new File("."));
             pb.redirectErrorStream(true);
             
             Process process = pb.start();
+            
+            // Leer la salida del proceso
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("   [Python] " + line);
+                }
+            }
+            
             int exitCode = process.waitFor();
             
             if (exitCode == 0) {

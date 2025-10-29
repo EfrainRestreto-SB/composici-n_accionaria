@@ -82,12 +82,18 @@ public class ComposicionAccionariaGUI extends JFrame {
     }
 
     /**
-     * Crea el panel de encabezado con título
+     * Crea el panel de encabezado con título y logo
      */
     private JPanel createHeaderPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(new Color(0, 51, 102)); // Azul corporativo
+        panel.setBackground(new Color(227, 24, 55)); // Rojo corporativo Davivienda
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        // Logo de Davivienda en la parte izquierda
+        JLabel lblLogo = createLogoLabel();
+        if (lblLogo != null) {
+            panel.add(lblLogo, BorderLayout.WEST);
+        }
 
         JLabel lblTitulo = new JLabel("ANÁLISIS DE COMPOSICIÓN ACCIONARIA");
         lblTitulo.setFont(new Font("Arial", Font.BOLD, 20));
@@ -100,13 +106,43 @@ public class ComposicionAccionariaGUI extends JFrame {
         lblSubtitulo.setHorizontalAlignment(SwingConstants.CENTER);
 
         JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, 5));
-        textPanel.setBackground(new Color(0, 51, 102));
+        textPanel.setBackground(new Color(227, 24, 55)); // Rojo corporativo Davivienda
         textPanel.add(lblTitulo);
         textPanel.add(lblSubtitulo);
 
         panel.add(textPanel, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    /**
+     * Crea el label con el logo de Davivienda
+     */
+    private JLabel createLogoLabel() {
+        try {
+            // Intentar cargar el logo desde el directorio raíz del proyecto
+            File logoFile = new File("Imagen1.png");
+            if (!logoFile.exists()) {
+                // Si no está en el directorio actual, intentar desde resources
+                logoFile = new File("src/main/resources/Imagen1.png");
+            }
+            
+            if (logoFile.exists()) {
+                ImageIcon originalIcon = new ImageIcon(logoFile.getAbsolutePath());
+                
+                // Escalar la imagen para que tenga una altura apropiada (60px)
+                Image scaledImage = originalIcon.getImage().getScaledInstance(
+                    -1, 60, Image.SCALE_SMOOTH);
+                ImageIcon scaledIcon = new ImageIcon(scaledImage);
+                
+                JLabel logoLabel = new JLabel(scaledIcon);
+                logoLabel.setBorder(new EmptyBorder(0, 0, 0, 15)); // Margen derecho
+                return logoLabel;
+            }
+        } catch (Exception e) {
+            appendLog("⚠️ No se pudo cargar el logo: " + e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -151,8 +187,9 @@ public class ComposicionAccionariaGUI extends JFrame {
         gbc.gridx = 1;
         gbc.gridwidth = 2;
         gbc.weightx = 1.0;
-        txtEntidadRaiz = new JTextField();
-        txtEntidadRaiz.setToolTipText("Ingrese el nombre de la entidad raíz para el análisis");
+        txtEntidadRaiz = new JTextField("RED COW INC");
+        txtEntidadRaiz.setEditable(false);
+        txtEntidadRaiz.setToolTipText("Entidad raíz fija para el análisis");
         inputPanel.add(txtEntidadRaiz, gbc);
 
         panel.add(inputPanel, BorderLayout.NORTH);
@@ -416,7 +453,7 @@ public class ComposicionAccionariaGUI extends JFrame {
      */
     private void limpiarFormulario() {
         txtArchivo.setText("");
-        txtEntidadRaiz.setText("");
+        txtEntidadRaiz.setText("RED COW INC");
         txtLog.setText("");
         archivoSeleccionado = null;
         ultimoPdfGenerado = null;
@@ -441,7 +478,7 @@ public class ComposicionAccionariaGUI extends JFrame {
         btnSeleccionar.setEnabled(enabled);
         btnProcesar.setEnabled(enabled);
         btnLimpiar.setEnabled(enabled);
-        txtEntidadRaiz.setEnabled(enabled);
+        // txtEntidadRaiz permanece siempre deshabilitado
     }
 
     /**
@@ -466,8 +503,9 @@ public class ComposicionAccionariaGUI extends JFrame {
             if (needsCorrections) {
                 appendLog("🔧 Aplicando correcciones automáticas al Excel...");
                 
-                ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue.py");
+                ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue_dynamic.py", excelPath);
                 pb.directory(new File(System.getProperty("user.dir")));
+                pb.redirectErrorStream(true);
                 
                 Process process = pb.start();
                 
