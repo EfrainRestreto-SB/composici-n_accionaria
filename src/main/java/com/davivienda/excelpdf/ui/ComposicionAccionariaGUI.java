@@ -277,13 +277,27 @@ public class ComposicionAccionariaGUI extends JFrame {
 
         // Iniciar en el directorio actual
         fileChooser.setCurrentDirectory(new File(System.getProperty("user.dir")));
+        
+        // Preseleccionar data.xlsx si existe
+        File dataFile = new File(System.getProperty("user.dir"), "data.xlsx");
+        if (dataFile.exists()) {
+            fileChooser.setSelectedFile(dataFile);
+            appendLog("💡 Archivo data.xlsx detectado y preseleccionado");
+        }
 
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             archivoSeleccionado = fileChooser.getSelectedFile();
             txtArchivo.setText(archivoSeleccionado.getAbsolutePath());
-            lblEstado.setText("Archivo seleccionado: " + archivoSeleccionado.getName());
-            appendLog("Archivo seleccionado: " + archivoSeleccionado.getAbsolutePath());
+            
+            if (archivoSeleccionado.getName().equals("data.xlsx")) {
+                lblEstado.setText("Archivo data.xlsx seleccionado - Se generará versión corregida automáticamente");
+                appendLog("📁 Archivo data.xlsx seleccionado: " + archivoSeleccionado.getAbsolutePath());
+                appendLog("ℹ️ Se generará automáticamente data_cleaned_fixed.xlsx durante el procesamiento");
+            } else {
+                lblEstado.setText("Archivo seleccionado: " + archivoSeleccionado.getName());
+                appendLog("Archivo seleccionado: " + archivoSeleccionado.getAbsolutePath());
+            }
         }
     }
 
@@ -316,6 +330,9 @@ public class ComposicionAccionariaGUI extends JFrame {
         progressBar.setString("Procesando...");
         lblEstado.setText("Procesando análisis...");
 
+        // Limpiar archivos de corrección previos antes de procesar
+        limpiarArchivosCorrectionPrevios();
+
         // Procesar en hilo separado para no bloquear UI
         SwingWorker<String, String> worker = new SwingWorker<String, String>() {
             @Override
@@ -334,20 +351,38 @@ public class ComposicionAccionariaGUI extends JFrame {
                     progressBar.setValue(40);
                 }
 
-                // Aplicar correcciones automáticas si es necesario
+                // Lógica especial para data.xlsx: siempre generar versión corregida
                 String archivoOriginal = archivoExcel;
-                publish("\nVerificando si el Excel necesita correcciones...");
-                publish("Archivo a procesar: " + archivoExcel);
-                progressBar.setValue(45);
+                String archivoParaProcesar = archivoExcel;
                 
-                String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
-                if (!archivoCorregido.equals(archivoExcel)) {
-                    publish("🔧 Correcciones automáticas aplicadas");
+                if (new File(archivoExcel).getName().equals("data.xlsx")) {
+                    publish("\n📁 Detectado archivo data.xlsx - Generando versión corregida...");
                     publish("Archivo original: " + archivoOriginal);
-                    publish("Archivo corregido: " + archivoCorregido);
-                    archivoExcel = archivoCorregido;
+                    progressBar.setValue(45);
+                    
+                    String archivoCorregido = generarArchivoCorregido(archivoExcel);
+                    if (new File(archivoCorregido).exists()) {
+                        publish("✅ Archivo corregido generado exitosamente");
+                        publish("Archivo corregido: " + archivoCorregido);
+                        archivoParaProcesar = archivoCorregido;
+                    } else {
+                        publish("⚠️ No se pudo generar archivo corregido, usando original");
+                    }
                 } else {
-                    publish("ℹ️ No se requieren correcciones para este archivo");
+                    // Para otros archivos, aplicar correcciones solo si es necesario
+                    publish("\nVerificando si el Excel necesita correcciones...");
+                    publish("Archivo a procesar: " + archivoExcel);
+                    progressBar.setValue(45);
+                    
+                    String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
+                    if (!archivoCorregido.equals(archivoExcel)) {
+                        publish("🔧 Correcciones automáticas aplicadas");
+                        publish("Archivo original: " + archivoOriginal);
+                        publish("Archivo corregido: " + archivoCorregido);
+                        archivoParaProcesar = archivoCorregido;
+                    } else {
+                        publish("ℹ️ No se requieren correcciones para este archivo");
+                    }
                 }
                 
                 // Procesar análisis
@@ -355,16 +390,16 @@ public class ComposicionAccionariaGUI extends JFrame {
                 progressBar.setValue(50);
 
                 ExcelOwnershipProcessor processor = new ExcelOwnershipProcessor();
-                String outputPdf = archivoExcel.replace(".xlsx", "_composicion_accionaria.pdf");
+                String outputPdf = archivoParaProcesar.replace(".xlsx", "_composicion_accionaria.pdf");
                 
-                publish("Archivo Excel: " + archivoExcel);
+                publish("Archivo Excel a procesar: " + archivoParaProcesar);
                 publish("Entidad raíz: " + entidadRaiz);
                 publish("PDF salida: " + outputPdf);
                 
                 progressBar.setValue(60);
 
                 ExcelOwnershipProcessor.ProcessingResult result = 
-                    processor.processOwnershipAnalysis(archivoExcel, entidadRaiz, outputPdf);
+                    processor.processOwnershipAnalysis(archivoParaProcesar, entidadRaiz, outputPdf);
 
                 progressBar.setValue(90);
 
@@ -488,6 +523,91 @@ public class ComposicionAccionariaGUI extends JFrame {
         if (bytes < 1024) return bytes + " bytes";
         if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
         return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+    }
+
+    /**
+     * Limpia archivos de corrección previos para asegurar procesamiento fresco
+     */
+    private void limpiarArchivosCorrectionPrevios() {
+        try {
+            appendLog("🧹 Limpiando archivos de corrección previos...");
+            
+            // Buscar y eliminar data_cleaned_fixed.xlsx en el directorio actual
+            File archivoCorregidoPrevio = new File("data_cleaned_fixed.xlsx");
+            if (archivoCorregidoPrevio.exists()) {
+                boolean eliminado = archivoCorregidoPrevio.delete();
+                if (eliminado) {
+                    appendLog("✅ Eliminado archivo previo: data_cleaned_fixed.xlsx");
+                } else {
+                    appendLog("⚠️ No se pudo eliminar: data_cleaned_fixed.xlsx");
+                }
+            } else {
+                appendLog("ℹ️ No se encontró archivo de corrección previo");
+            }
+            
+            // También buscar otros posibles archivos corregidos basados en el patrón *_cleaned_fixed.xlsx
+            File directorioActual = new File(".");
+            File[] archivosCorregidos = directorioActual.listFiles((dir, name) -> 
+                name.toLowerCase().endsWith("_cleaned_fixed.xlsx"));
+            
+            if (archivosCorregidos != null && archivosCorregidos.length > 0) {
+                appendLog("🔍 Encontrados " + archivosCorregidos.length + " archivos de corrección adicionales");
+                for (File archivo : archivosCorregidos) {
+                    boolean eliminado = archivo.delete();
+                    if (eliminado) {
+                        appendLog("✅ Eliminado: " + archivo.getName());
+                    } else {
+                        appendLog("⚠️ No se pudo eliminar: " + archivo.getName());
+                    }
+                }
+            }
+            
+            appendLog("🧹 Limpieza de archivos completada\n");
+            
+        } catch (Exception e) {
+            appendLog("❌ Error durante limpieza de archivos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Genera un archivo corregido específicamente para data.xlsx
+     * Siempre produce data_cleaned_fixed.xlsx limpio y listo para procesar
+     */
+    private String generarArchivoCorregido(String excelPath) {
+        try {
+            appendLog("🔧 Generando archivo corregido desde: " + new File(excelPath).getName());
+            
+            ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue_dynamic.py", excelPath);
+            pb.directory(new File(System.getProperty("user.dir")));
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            
+            // Leer la salida del proceso
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                appendLog("Python: " + line);
+            }
+            
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+                if (new File(correctedPath).exists()) {
+                    appendLog("✅ Archivo corregido generado exitosamente: " + new File(correctedPath).getName());
+                    appendLog("📁 Ubicación: " + correctedPath);
+                    return correctedPath;
+                } else {
+                    appendLog("❌ Error: El archivo corregido no se generó correctamente");
+                }
+            } else {
+                appendLog("⚠️ Error en generación de archivo corregido (código: " + exitCode + ")");
+            }
+        } catch (Exception e) {
+            appendLog("⚠️ Error generando archivo corregido: " + e.getMessage());
+        }
+        
+        return excelPath; // Retornar original si falla
     }
 
     /**
