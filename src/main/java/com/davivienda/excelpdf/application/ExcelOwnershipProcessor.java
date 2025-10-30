@@ -70,6 +70,7 @@ public class ExcelOwnershipProcessor {
             
             Map<String, Double> finalResults = calculator.getFinalResults();
             Map<String, String> beneficiaryPaths = calculator.getBeneficiaryPaths();
+            Map<String, Map<String, Double>> originalData = calculator.getOriginalData();
             
             resultBuilder
                 .withFinalResults(finalResults)
@@ -84,7 +85,8 @@ public class ExcelOwnershipProcessor {
                 finalResults, 
                 beneficiaryPaths, 
                 rootEntity, 
-                outputPdfPath
+                outputPdfPath,
+                originalData
             );
             
             // Verificar que el PDF se generó correctamente

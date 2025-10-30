@@ -33,6 +33,7 @@ public class OwnershipCalculator {
     private final Map<String, Double> finalResults = new HashMap<>();
     private final Map<String, String> beneficiaryPaths = new HashMap<>();
     private final Set<String> visitedInCurrentPath = new HashSet<>(); // Para detección de ciclos
+    private final Map<String, Map<String, Double>> originalData = new HashMap<>(); // Datos originales del Excel
     
     /**
      * Obtiene o crea un nodo en el grafo.
@@ -109,6 +110,10 @@ public class OwnershipCalculator {
                     Node entityNode = getOrCreateNode(entity);
                     Node ownerNode = getOrCreateNode(owner);
                     entityNode.addOwner(ownerNode, normalizedPercentage);
+                    
+                    // Almacenar datos originales para el desglose detallado
+                    originalData.computeIfAbsent(entity, k -> new HashMap<>())
+                               .put(owner, normalizedPercentage);
                     
                     validRowCount++;
                     logger.debug("Procesada relación: {} -> {} ({}%)", entity, owner, percentage);
@@ -313,5 +318,14 @@ public class OwnershipCalculator {
         
         return String.format("Estadísticas del grafo: %d entidades totales, %d con propietarios, %d beneficiarios finales",
                            totalEntities, entitiesWithOwners, finalBeneficiaries);
+    }
+    
+    /**
+     * Obtiene los datos originales del Excel para el desglose detallado.
+     * 
+     * @return mapa de entidad -> (accionista -> porcentaje)
+     */
+    public Map<String, Map<String, Double>> getOriginalData() {
+        return new HashMap<>(originalData);
     }
 }
