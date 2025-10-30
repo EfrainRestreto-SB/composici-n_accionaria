@@ -1,11 +1,20 @@
 package com.davivienda.excelpdf.application;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,14 +88,20 @@ public class ExcelOwnershipProcessor {
                 
             logger.info(" Cálculos completados. Beneficiarios encontrados: {}", finalResults.size());
             
-            // Paso 3: Generar reporte PDF
-            logger.info(" Paso 3: Generando reporte PDF...");
+            // Paso 3: Cargar datos originales para la tabla de desglose
+            logger.info(" Paso 3: Cargando datos originales de data.xlsx...");
+            Map<String, Map<String, Double>> originalDataFromFile = loadOriginalData("data.xlsx");
+            java.util.List<String[]> dataXlsxRows = loadDataXlsxRows("data.xlsx");
+            
+            // Paso 4: Generar reporte PDF
+            logger.info(" Paso 4: Generando reporte PDF...");
             pdfGenerator.generateOwnershipReport(
                 finalResults, 
                 beneficiaryPaths, 
                 rootEntity, 
                 outputPdfPath,
-                originalData
+                originalDataFromFile,
+                dataXlsxRows
             );
             
             // Verificar que el PDF se generó correctamente
@@ -258,6 +273,196 @@ public class ExcelOwnershipProcessor {
             public ProcessingResult build() {
                 return new ProcessingResult(this);
             }
+        }
+    }
+    
+    /**
+     * Carga los datos originales del archivo Excel para generar la tabla de desglose.
+     * Lee el archivo data.xlsx y construye la estructura jerárquica original.
+     * 
+     * @param excelPath ruta al archivo Excel original (data.xlsx)
+     * @return Map con la estructura jerárquica del Excel original
+     */
+    private Map<String, Map<String, Double>> loadOriginalData(String excelPath) {
+        Map<String, Map<String, Double>> originalDataMap = new HashMap<>();
+        
+        try {
+            logger.info("Cargando datos originales desde: {}", excelPath);
+            
+            File excelFile = new File(excelPath);
+            if (!excelFile.exists()) {
+                logger.warn("Archivo original no encontrado: {}", excelPath);
+                return originalDataMap;
+            }
+            
+            try (FileInputStream fis = new FileInputStream(excelFile);
+                 Workbook workbook = WorkbookFactory.create(fis)) {
+                
+                Sheet sheet = workbook.getSheetAt(0);
+                
+                // Leer todas las filas del Excel
+                for (Row row : sheet) {
+                    if (row.getRowNum() == 0) continue; // Saltar encabezado
+                    
+                    Cell entityCell = row.getCell(0);
+                    Cell percentageCell = row.getCell(2);
+                    
+                    if (entityCell != null && percentageCell != null) {
+                        String entityName = getCellValueAsString(entityCell);
+                        
+                        if (entityName != null && !entityName.trim().isEmpty()) {
+                            try {
+                                double percentage = getCellValueAsDouble(percentageCell);
+                                
+                                // Crear mapa interno para la entidad
+                                Map<String, Double> entityData = new HashMap<>();
+                                entityData.put("PERCENTAGE_TOTAL", percentage);
+                                
+                                originalDataMap.put(entityName.trim(), entityData);
+                                
+                            } catch (Exception e) {
+                                logger.warn("Error procesando porcentaje para entidad {}: {}", 
+                                           entityName, e.getMessage());
+                            }
+                        }
+                    }
+                }
+                
+                logger.info("Datos originales cargados exitosamente. Entidades procesadas: {}", 
+                           originalDataMap.size());
+                
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error cargando datos originales desde {}: {}", excelPath, e.getMessage(), e);
+        }
+        
+        return originalDataMap;
+    }
+    
+    /**
+     * Carga las filas 4-45 del archivo data.xlsx con las tres columnas exactas para el PDF.
+     * 
+     * @param excelPath ruta al archivo Excel original (data.xlsx)
+     * @return Lista de datos estructurados para la tabla del PDF
+     */
+    private java.util.List<String[]> loadDataXlsxRows(String excelPath) {
+        java.util.List<String[]> tableData = new java.util.ArrayList<>();
+        
+        try {
+            logger.info("Cargando filas 4-45 de data.xlsx para tabla PDF");
+            
+            File excelFile = new File(excelPath);
+            if (!excelFile.exists()) {
+                logger.warn("Archivo data.xlsx no encontrado: {}", excelPath);
+                return tableData;
+            }
+            
+            try (FileInputStream fis = new FileInputStream(excelFile);
+                 Workbook workbook = WorkbookFactory.create(fis)) {
+                
+                Sheet sheet = workbook.getSheetAt(0);
+                
+                // Leer específicamente las filas 4-45 (índices 3-44)
+                for (int rowIndex = 3; rowIndex < 45 && rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                    Row row = sheet.getRow(rowIndex);
+                    if (row == null) continue;
+                    
+                    Cell columnA = row.getCell(0); // Entidad/Nombre
+                    Cell columnB = row.getCell(1); // Porcentaje directo
+                    Cell columnC = row.getCell(2); // Porcentaje final
+                    
+                    String entityName = getCellValueAsString(columnA);
+                    String directPercentage = getCellValueAsString(columnB);
+                    String finalPercentage = getCellValueAsString(columnC);
+                    
+                    // Solo incluir filas que tienen al menos algo en una de las tres columnas
+                    if ((entityName != null && !entityName.trim().isEmpty()) || 
+                        (directPercentage != null && !directPercentage.trim().isEmpty()) ||
+                        (finalPercentage != null && !finalPercentage.trim().isEmpty())) {
+                        
+                        // Limpiar valores nulos o vacíos
+                        entityName = (entityName != null) ? entityName.trim() : "";
+                        directPercentage = (directPercentage != null) ? directPercentage.trim() : "";
+                        finalPercentage = (finalPercentage != null) ? finalPercentage.trim() : "";
+                        
+                        // Agregar la fila como array de strings
+                        tableData.add(new String[]{entityName, directPercentage, finalPercentage});
+                    }
+                }
+                
+                logger.info("Filas de data.xlsx cargadas para tabla PDF: {}", tableData.size());
+                
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error cargando filas de data.xlsx: {}", e.getMessage(), e);
+        }
+        
+        return tableData;
+    }
+    
+    /**
+     * Obtiene el valor de una celda como String.
+     */
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
+        
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.FORMULA) {
+            cellType = cell.getCachedFormulaResultType();
+        }
+        
+        switch (cellType) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                // Si es un número entero, no mostrar decimales
+                double numValue = cell.getNumericCellValue();
+                if (numValue == (long) numValue) {
+                    return String.valueOf((long) numValue);
+                }
+                return String.valueOf(numValue);
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case BLANK:
+                return "";
+            default:
+                return "";
+        }
+    }
+    
+    /**
+     * Obtiene el valor de una celda como double.
+     */
+    private double getCellValueAsDouble(Cell cell) {
+        if (cell == null) {
+            return 0.0;
+        }
+        
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.FORMULA) {
+            cellType = cell.getCachedFormulaResultType();
+        }
+        
+        switch (cellType) {
+            case NUMERIC:
+                return cell.getNumericCellValue();
+            case STRING:
+                try {
+                    String strValue = cell.getStringCellValue().trim();
+                    if (strValue.isEmpty()) {
+                        return 0.0;
+                    }
+                    // Intentar parsear como número
+                    return Double.parseDouble(strValue.replace("%", "").replace(",", "."));
+                } catch (NumberFormatException e) {
+                    return 0.0;
+                }
+            default:
+                return 0.0;
         }
     }
 }
