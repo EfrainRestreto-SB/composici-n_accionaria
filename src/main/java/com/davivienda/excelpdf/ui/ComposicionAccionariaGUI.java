@@ -242,10 +242,6 @@ public class ComposicionAccionariaGUI extends JFrame {
         panel.add(btnAbrirPdf);
 
         btnProcesar = new JButton("PROCESAR ANÁLISIS");
-        btnProcesar.setFont(new Font("Arial", Font.BOLD, 12));
-        btnProcesar.setBackground(new Color(0, 102, 204));
-        btnProcesar.setForeground(Color.WHITE);
-        btnProcesar.setFocusPainted(false);
         btnProcesar.setToolTipText("Iniciar el procesamiento del análisis");
         btnProcesar.addActionListener(e -> procesarAnalisis());
         panel.add(btnProcesar);
