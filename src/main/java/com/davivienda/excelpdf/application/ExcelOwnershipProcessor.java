@@ -383,8 +383,10 @@ public class ExcelOwnershipProcessor {
                         
                         // Limpiar valores nulos o vacíos
                         entityName = (entityName != null) ? entityName.trim() : "";
-                        directPercentage = (directPercentage != null) ? directPercentage.trim() : "";
-                        finalPercentage = (finalPercentage != null) ? finalPercentage.trim() : "";
+                        
+                        // Convertir valores decimales a porcentajes (multiplicar por 100)
+                        directPercentage = convertToPercentage(directPercentage);
+                        finalPercentage = convertToPercentage(finalPercentage);
                         
                         // Agregar la fila como array de strings
                         tableData.add(new String[]{entityName, directPercentage, finalPercentage});
@@ -400,6 +402,33 @@ public class ExcelOwnershipProcessor {
         }
         
         return tableData;
+    }
+    
+    /**
+     * Convierte un valor decimal a porcentaje con formato apropiado.
+     * Ejemplo: "0.504" -> "50,4%", "1" -> "100,0%", "" -> ""
+     */
+    private String convertToPercentage(String value) {
+        if (value == null || value.trim().isEmpty() || value.equals("0")) {
+            return "";
+        }
+        
+        try {
+            double decimal = Double.parseDouble(value.trim());
+            double percentage = decimal * 100.0;
+            
+            // Formatear con una decimal y coma como separador decimal
+            java.text.DecimalFormat df = new java.text.DecimalFormat("#,##0.0");
+            java.text.DecimalFormatSymbols symbols = df.getDecimalFormatSymbols();
+            symbols.setDecimalSeparator(',');
+            df.setDecimalFormatSymbols(symbols);
+            
+            return df.format(percentage) + "%";
+            
+        } catch (NumberFormatException e) {
+            // Si no es un número, devolver el valor original
+            return value.trim();
+        }
     }
     
     /**
