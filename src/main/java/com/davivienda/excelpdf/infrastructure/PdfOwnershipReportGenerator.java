@@ -42,6 +42,7 @@ public class PdfOwnershipReportGenerator {
     private static final Logger logger = LoggerFactory.getLogger(PdfOwnershipReportGenerator.class);
     
     private static final DecimalFormat PERCENTAGE_FORMAT = new DecimalFormat("#0.00%");
+    private static final DecimalFormat PERCENTAGE_FORMAT_SUMMARY = new DecimalFormat("#0%");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     
     // Colores corporativos
@@ -200,7 +201,7 @@ public class PdfOwnershipReportGenerator {
         // Participación total distribuida
         double totalDistributed = finalResults.values().stream().mapToDouble(Double::doubleValue).sum();
         Paragraph totalPercentage = new Paragraph(
-            String.format("• Participación total distribuida: %s", PERCENTAGE_FORMAT.format(totalDistributed)), 
+            String.format("• Participación total distribuida: %s", PERCENTAGE_FORMAT_SUMMARY.format(totalDistributed)), 
             bodyFont
         );
         totalPercentage.setSpacingAfter(8);
@@ -216,7 +217,7 @@ public class PdfOwnershipReportGenerator {
                 Paragraph principalBeneficiary = new Paragraph(
                     String.format("• Principal beneficiario: %s (%s)", 
                                 principal.getKey(), 
-                                PERCENTAGE_FORMAT.format(principal.getValue())), 
+                                PERCENTAGE_FORMAT_SUMMARY.format(principal.getValue())), 
                     bodyFont
                 );
                 principalBeneficiary.setSpacingAfter(20);
