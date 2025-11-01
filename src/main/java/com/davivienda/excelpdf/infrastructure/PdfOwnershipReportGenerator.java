@@ -359,7 +359,7 @@ public class PdfOwnershipReportGenerator {
     }
     
     /**
-     * Añade la tabla detallada de desglose de composición accionaria replicando exactamente las filas 4-45 de data.xlsx
+     * Añade la tabla detallada de desglose de composición accionaria replicando dinámicamente todas las filas de data.xlsx
      */
     private void addDetailedBreakdown(Document document, Map<String, Map<String, Double>> originalData, String rootEntity, java.util.List<String[]> dataXlsxRows) 
             throws DocumentException {

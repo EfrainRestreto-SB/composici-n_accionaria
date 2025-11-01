@@ -43,7 +43,7 @@ public class ExcelOwnershipProcessor {
     }
     
     /**
-     * Procesa un archivo Excel y genera un reporte PDF con la composición accionaria.
+     * Procesa el análisis completo de composición accionaria usando archivo procesado.
      * 
      * @param excelPath ruta del archivo Excel de entrada
      * @param rootEntity nombre de la entidad raíz para el cálculo
@@ -53,6 +53,22 @@ public class ExcelOwnershipProcessor {
      * @throws IllegalArgumentException si los parámetros son inválidos
      */
     public ProcessingResult processOwnershipAnalysis(String excelPath, String rootEntity, String outputPdfPath) 
+            throws IOException {
+        return processOwnershipAnalysis(excelPath, rootEntity, outputPdfPath, excelPath);
+    }
+
+    /**
+     * Procesa el análisis completo de composición accionaria con archivo original separado.
+     * 
+     * @param excelPath ruta del archivo Excel procesado/corregido
+     * @param rootEntity nombre de la entidad raíz para el cálculo
+     * @param outputPdfPath ruta del archivo PDF de salida
+     * @param originalExcelPath ruta del archivo Excel original para la tabla del PDF
+     * @return resultado del procesamiento con estadísticas
+     * @throws IOException si hay problemas de acceso a archivos
+     * @throws IllegalArgumentException si los parámetros son inválidos
+     */
+    public ProcessingResult processOwnershipAnalysis(String excelPath, String rootEntity, String outputPdfPath, String originalExcelPath) 
             throws IOException {
         
         logger.info("=== Iniciando análisis de composición accionaria ===");
@@ -89,9 +105,9 @@ public class ExcelOwnershipProcessor {
             logger.info(" Cálculos completados. Beneficiarios encontrados: {}", finalResults.size());
             
             // Paso 3: Cargar datos originales para la tabla de desglose
-            logger.info(" Paso 3: Cargando datos originales de data.xlsx...");
-            Map<String, Map<String, Double>> originalDataFromFile = loadOriginalData("data.xlsx");
-            java.util.List<String[]> dataXlsxRows = loadDataXlsxRows("data.xlsx");
+            logger.info(" Paso 3: Cargando datos originales para tabla PDF desde: {}", originalExcelPath);
+            Map<String, Map<String, Double>> originalDataFromFile = loadOriginalData(originalExcelPath);
+            java.util.List<String[]> dataXlsxRows = loadDataXlsxRows(originalExcelPath);
             
             // Paso 4: Generar reporte PDF
             logger.info(" Paso 4: Generando reporte PDF...");
@@ -278,9 +294,9 @@ public class ExcelOwnershipProcessor {
     
     /**
      * Carga los datos originales del archivo Excel para generar la tabla de desglose.
-     * Lee el archivo data.xlsx y construye la estructura jerárquica original.
+     * Lee el archivo Excel original y construye la estructura jerárquica original.
      * 
-     * @param excelPath ruta al archivo Excel original (data.xlsx)
+     * @param excelPath ruta al archivo Excel original
      * @return Map con la estructura jerárquica del Excel original
      */
     private Map<String, Map<String, Double>> loadOriginalData(String excelPath) {
@@ -341,20 +357,20 @@ public class ExcelOwnershipProcessor {
     }
     
     /**
-     * Carga las filas 4-45 del archivo data.xlsx con las tres columnas exactas para el PDF.
+     * Carga las filas desde la 4 en adelante del archivo Excel original con las tres columnas exactas para el PDF.
      * 
-     * @param excelPath ruta al archivo Excel original (data.xlsx)
+     * @param excelPath ruta al archivo Excel original
      * @return Lista de datos estructurados para la tabla del PDF
      */
     private java.util.List<String[]> loadDataXlsxRows(String excelPath) {
         java.util.List<String[]> tableData = new java.util.ArrayList<>();
         
         try {
-            logger.info("Cargando filas 4-45 de data.xlsx para tabla PDF");
+            logger.info("Cargando filas desde archivo Excel original para tabla PDF (desde fila 4): {}", excelPath);
             
             File excelFile = new File(excelPath);
             if (!excelFile.exists()) {
-                logger.warn("Archivo data.xlsx no encontrado: {}", excelPath);
+                logger.warn("Archivo Excel original no encontrado: {}", excelPath);
                 return tableData;
             }
             
@@ -363,8 +379,8 @@ public class ExcelOwnershipProcessor {
                 
                 Sheet sheet = workbook.getSheetAt(0);
                 
-                // Leer específicamente las filas 4-45 (índices 3-44)
-                for (int rowIndex = 3; rowIndex < 45 && rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                // Leer dinámicamente desde la fila 4 hasta la última fila con datos
+                for (int rowIndex = 3; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                     Row row = sheet.getRow(rowIndex);
                     if (row == null) continue;
                     
@@ -393,12 +409,12 @@ public class ExcelOwnershipProcessor {
                     }
                 }
                 
-                logger.info("Filas de data.xlsx cargadas para tabla PDF: {}", tableData.size());
+                logger.info("Filas del archivo Excel original cargadas para tabla PDF: {}", tableData.size());
                 
             }
             
         } catch (Exception e) {
-            logger.error("Error cargando filas de data.xlsx: {}", e.getMessage(), e);
+            logger.error("Error cargando filas del archivo Excel original: {}", e.getMessage(), e);
         }
         
         return tableData;

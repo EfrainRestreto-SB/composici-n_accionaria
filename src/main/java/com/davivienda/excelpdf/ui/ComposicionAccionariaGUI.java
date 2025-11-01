@@ -389,13 +389,14 @@ public class ComposicionAccionariaGUI extends JFrame {
                 String outputPdf = archivoParaProcesar.replace(".xlsx", "_composicion_accionaria.pdf");
                 
                 publish("Archivo Excel a procesar: " + archivoParaProcesar);
+                publish("Archivo Excel original para PDF: " + archivoOriginal);
                 publish("Entidad raíz: " + entidadRaiz);
                 publish("PDF salida: " + outputPdf);
                 
                 progressBar.setValue(60);
 
                 ExcelOwnershipProcessor.ProcessingResult result = 
-                    processor.processOwnershipAnalysis(archivoParaProcesar, entidadRaiz, outputPdf);
+                    processor.processOwnershipAnalysis(archivoParaProcesar, entidadRaiz, outputPdf, archivoOriginal);
 
                 progressBar.setValue(90);
 

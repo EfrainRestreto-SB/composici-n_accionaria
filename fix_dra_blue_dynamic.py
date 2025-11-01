@@ -98,28 +98,56 @@ def extract_final_beneficiaries(df):
 def is_final_entity(entidad):
     """
     Determina si una entidad es un beneficiario final (persona natural principalmente)
+    Mantiene la lógica original pero agrega detección dinámica de personas
     """
-    # Lista de nombres de personas (beneficiarios finales)
-    person_indicators = [
+    entidad_upper = entidad.upper()
+    
+    # Lista base de nombres de personas conocidos (beneficiarios finales)
+    known_person_indicators = [
         "RODRIGUEZ", "DIAZ", "CONTRERAS", "MERCEDES", "STELLA", 
         "ALEXANDRA", "CARLOS", "JORGE", "ARTURO", "ENRIQUE", "LUZ"
     ]
     
-    # Entidades operativas que también son beneficiarios finales
+    # Entidades operativas conocidas que también son beneficiarios finales
     operational_entities = [
         "INVERSIONES MADCOM", "MADCOM"
     ]
     
-    entidad_upper = entidad.upper()
+    # Entidades corporativas que NO son beneficiarios finales (aunque no tengan palabras corporativas obvias)
+    corporate_entities = [
+        "TIERRA ARCO IRIS"  # Es una entidad corporativa, no persona natural
+    ]
     
-    # Si contiene indicadores de nombre de persona
-    for indicator in person_indicators:
+    # Verificar contra patrones conocidos primero
+    for indicator in known_person_indicators:
         if indicator in entidad_upper:
             return True
             
-    # Si es una entidad operativa específica
+    # Verificar si es una entidad corporativa conocida (NO beneficiario final)
+    for entity in corporate_entities:
+        if entity in entidad_upper:
+            return False
+            
     for entity in operational_entities:
         if entity in entidad_upper:
+            return True
+    
+    # Detección dinámica adicional para nuevos nombres de personas
+    # Buscar patrones que indiquen nombre de persona (2+ nombres propios)
+    words = entidad_upper.split()
+    if len(words) >= 2:
+        # Si contiene palabras típicas de nombres de persona
+        name_patterns = ["MARIA", "FERNANDEZ", "LOPEZ", "JUAN", "PEDRO", "ANA", "JOSE"]
+        for pattern in name_patterns:
+            if pattern in entidad_upper:
+                return True
+        
+        # Si todas las palabras empiezan con mayúscula y no contienen palabras corporativas
+        corporate_words = ["INC", "S.A", "SAS", "LTDA", "CORPORATION", "COMPANY", "FINANCIAL", "INVERSIONES"]
+        is_corporate = any(corp_word in entidad_upper for corp_word in corporate_words)
+        
+        if not is_corporate and len(words) >= 2:
+            # Probablemente es un nombre de persona
             return True
     
     return False
@@ -137,10 +165,8 @@ def create_consolidated_output(beneficiaries):
     
     # SOLO agregar participaciones directas en RED COW INC (no entidades intermedias)
     for beneficiary, participation in sorted_beneficiaries:
-        # Cambiar Alexandra Diaz Rodriguez por DRA BLUE GOW como accionista directo
+        # Mantener el nombre original del beneficiario final
         accionista_display = beneficiary
-        if "ALEXANDRA DIAZ RODRIGUEZ" in beneficiary.upper():
-            accionista_display = "DRA BLUE GOW"
             
         output_data.append({
             "Entidad": "RED COW INC",
@@ -160,13 +186,7 @@ def detect_intermediate_entities(beneficiaries):
     """
     intermediate = []
     
-    # Si Alexandra Díaz Rodríguez es beneficiario, agregar DRA BLUE GOW como intermedio
-    if any("ALEXANDRA" in beneficiary.upper() for beneficiary in beneficiaries):
-        intermediate.append({
-            "Entidad": "DRA BLUE GOW",
-            "Accionista": "Alexandra Diaz Rodriguez",
-            "Participacion": 100.0
-        })
+    # No agregar entidades intermedias adicionales
     
     return intermediate
 
@@ -190,11 +210,12 @@ def show_consolidation_stats(output_data):
     # Verificar si tenemos los valores esperados
     expected_beneficiaries = {
         "Stella Rodriguez Contreras": 34.02,
-        "DRA BLUE GOW": 14.54,  # Cambiado de DRA BLUE GLOW
+        "Alexandra Diaz Rodriguez": 12.65,  # Beneficiario real en lugar de DRA BLUE GOW
         "Luz Mercedes Diaz Rodriguez": 14.49,
         "Jorge Enrique Diaz Rodriguez": 12.28,
         "Carlos Arturo Diaz Rodriguez": 12.4,
         "Inversiones MADCOM": 12.28
+        # TIERRA ARCO IRIS eliminado - no es beneficiario final (entidad corporativa)
     }
     
     print(f"\nVERIFICACION CONTRA VALORES ESPERADOS:")
