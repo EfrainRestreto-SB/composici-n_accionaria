@@ -3,6 +3,8 @@ package com.davivienda.excelpdf;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
 
 import javax.swing.SwingUtilities;
@@ -198,15 +200,16 @@ public class Main {
     }
 
     /**
-     * Genera el nombre del archivo PDF de salida basado en el nombre del archivo Excel.
+     * Genera el nombre del archivo PDF de salida con timestamp HHMMSS.
      */
     private static String generateOutputPdfPath(String excelPath) {
         File excelFile = new File(excelPath);
-        String fileName = excelFile.getName();
-        String nameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.'));
         String directory = excelFile.getParent();
-
-        String pdfFileName = nameWithoutExtension + "_composicion_accionaria.pdf";
+        
+        // Generar timestamp HHMMSS
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"));
+        String pdfFileName = "composicion_accionaria_" + timestamp + ".pdf";
+        
         return (directory != null)
                 ? new File(directory, pdfFileName).getAbsolutePath()
                 : pdfFileName;
