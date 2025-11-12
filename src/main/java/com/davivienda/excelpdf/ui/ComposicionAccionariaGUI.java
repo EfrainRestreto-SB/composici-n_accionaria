@@ -358,13 +358,16 @@ public class ComposicionAccionariaGUI extends JFrame {
                     publish("Archivo original: " + archivoOriginal);
                     progressBar.setValue(45);
                     
-                    String archivoCorregido = generarArchivoCorregido(archivoExcel);
-                    if (new File(archivoCorregido).exists()) {
+                    try {
+                        String archivoCorregido = generarArchivoCorregido(archivoExcel);
                         publish(" Archivo corregido generado exitosamente");
                         publish("Archivo corregido: " + archivoCorregido);
                         archivoParaProcesar = archivoCorregido;
-                    } else {
-                        publish(" No se pudo generar archivo corregido, usando original");
+                    } catch (Exception e) {
+                        publish(" ❌ ERROR CRÍTICO: No se pudo generar el archivo corregido");
+                        publish(" Motivo: " + e.getMessage());
+                        publish(" ⚠️ PDF NO GENERADO debido a error en corrección del archivo");
+                        throw new Exception("No se pudo generar el archivo corregido para data.xlsx: " + e.getMessage());
                     }
                 } else {
                     // Para otros archivos, aplicar correcciones solo si es necesario
@@ -372,14 +375,21 @@ public class ComposicionAccionariaGUI extends JFrame {
                     publish("Archivo a procesar: " + archivoExcel);
                     progressBar.setValue(45);
                     
-                    String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
-                    if (!archivoCorregido.equals(archivoExcel)) {
-                        publish(" Correcciones automáticas aplicadas");
-                        publish("Archivo original: " + archivoOriginal);
-                        publish("Archivo corregido: " + archivoCorregido);
-                        archivoParaProcesar = archivoCorregido;
-                    } else {
-                        publish(" No se requieren correcciones para este archivo");
+                    try {
+                        String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
+                        if (!archivoCorregido.equals(archivoExcel)) {
+                            publish(" Correcciones automáticas aplicadas");
+                            publish("Archivo original: " + archivoOriginal);
+                            publish("Archivo corregido: " + archivoCorregido);
+                            archivoParaProcesar = archivoCorregido;
+                        } else {
+                            publish(" No se requieren correcciones para este archivo");
+                        }
+                    } catch (Exception e) {
+                        publish(" ❌ ERROR CRÍTICO: No se pudieron aplicar las correcciones necesarias");
+                        publish(" Motivo: " + e.getMessage());
+                        publish(" ⚠️ PDF NO GENERADO debido a error en corrección del archivo");
+                        throw new Exception("No se pudieron aplicar las correcciones al archivo: " + e.getMessage());
                     }
                 }
                 
@@ -445,14 +455,28 @@ public class ComposicionAccionariaGUI extends JFrame {
                     progressBar.setString("Error");
                     progressBar.setValue(0);
                     
-                    StringWriter sw = new StringWriter();
-                    e.printStackTrace(new PrintWriter(sw));
-                    appendLog("\n ERROR: " + e.getMessage());
-                    appendLog(sw.toString());
+                    String errorMessage = e.getMessage();
+                    appendLog("\n❌ ERROR CRÍTICO: " + errorMessage);
+                    
+                    // Determinar el tipo de error para mostrar mensaje apropiado
+                    String userMessage;
+                    if (errorMessage.contains("archivo corregido") || errorMessage.contains("correcciones")) {
+                        userMessage = "Error al generar archivo corregido.\n\n" +
+                                    "PDF NO GENERADO debido a fallos en la corrección del Excel.\n\n" +
+                                    "Detalles: " + errorMessage;
+                        appendLog("⚠️ IMPORTANTE: El PDF no fue generado debido a errores en la corrección del archivo Excel");
+                    } else {
+                        userMessage = "Error durante el procesamiento del análisis:\n" + errorMessage;
+                        
+                        // Mostrar stack trace solo para errores no relacionados con corrección
+                        StringWriter sw = new StringWriter();
+                        e.printStackTrace(new PrintWriter(sw));
+                        appendLog("Detalles técnicos: " + sw.toString());
+                    }
                     
                     JOptionPane.showMessageDialog(ComposicionAccionariaGUI.this,
-                        "Error durante el procesamiento:\n" + e.getMessage(),
-                        "Error",
+                        userMessage,
+                        "Error de Procesamiento",
                         JOptionPane.ERROR_MESSAGE);
                 } finally {
                     setButtonsEnabled(true);
@@ -576,7 +600,7 @@ public class ComposicionAccionariaGUI extends JFrame {
      * Genera un archivo corregido específicamente para data.xlsx
      * Siempre produce data_cleaned_fixed.xlsx limpio y listo para procesar
      */
-    private String generarArchivoCorregido(String excelPath) {
+    private String generarArchivoCorregido(String excelPath) throws Exception {
         try {
             appendLog(" Generando archivo corregido desde: " + new File(excelPath).getName());
             
@@ -601,22 +625,26 @@ public class ComposicionAccionariaGUI extends JFrame {
                     appendLog(" Ubicación: " + correctedPath);
                     return correctedPath;
                 } else {
-                    appendLog(" Error: El archivo corregido no se generó correctamente");
+                    String errorMsg = "El archivo corregido no se generó correctamente";
+                    appendLog(" Error: " + errorMsg);
+                    throw new Exception(errorMsg);
                 }
             } else {
-                appendLog(" Error en generación de archivo corregido (código: " + exitCode + ")");
+                String errorMsg = "Error en generación de archivo corregido (código: " + exitCode + ")";
+                appendLog(" Error: " + errorMsg);
+                throw new Exception(errorMsg);
             }
         } catch (Exception e) {
-            appendLog(" Error generando archivo corregido: " + e.getMessage());
+            String errorMsg = "Error generando archivo corregido: " + e.getMessage();
+            appendLog(" " + errorMsg);
+            throw new Exception(errorMsg);
         }
-        
-        return excelPath; // Retornar original si falla
     }
 
     /**
      * Aplica correcciones automáticas al Excel si es necesario
      */
-    private String aplicarCorreccionesAutomaticas(String excelPath) {
+    private String aplicarCorreccionesAutomaticas(String excelPath) throws Exception {
         try {
             appendLog(" Evaluando necesidad de correcciones para: " + excelPath);
             
@@ -647,17 +675,22 @@ public class ComposicionAccionariaGUI extends JFrame {
                         appendLog(" Archivo corregido en: " + correctedPath);
                         return correctedPath;
                     } else {
-                        appendLog(" Error: El archivo corregido no se generó");
+                        String errorMsg = "El archivo corregido no se generó después de aplicar correcciones";
+                        appendLog(" Error: " + errorMsg);
+                        throw new Exception(errorMsg);
                     }
                 } else {
-                    appendLog(" Error en correcciones automáticas (código: " + exitCode + "), usando archivo original");
+                    String errorMsg = "Error en correcciones automáticas (código: " + exitCode + ")";
+                    appendLog(" Error: " + errorMsg);
+                    throw new Exception(errorMsg);
                 }
             } else {
                 appendLog("ℹ El archivo no necesita correcciones automáticas");
             }
         } catch (Exception e) {
-            appendLog(" Error aplicando correcciones: " + e.getMessage());
-            e.printStackTrace();
+            String errorMsg = "Error aplicando correcciones: " + e.getMessage();
+            appendLog(" " + errorMsg);
+            throw new Exception(errorMsg);
         }
         
         return excelPath;
