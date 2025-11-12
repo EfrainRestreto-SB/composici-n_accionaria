@@ -6,10 +6,286 @@ Interpreta la estructura jerárquica del archivo data.xlsx y calcula beneficiari
 Versión 6: Interpretación inteligente de estructura jerárquica - Java Compatible
 """
 
-import pandas as pd
 import sys
 import os
 from pathlib import Path
+
+# === SISTEMA DE GESTIÓN AUTOMÁTICA DE DEPENDENCIAS ===
+def setup_virtual_environment():
+    """
+    Configura automáticamente un entorno virtual con las dependencias necesarias
+    Solo se ejecuta si hay problemas de importación
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+    
+    print("=== CONFIGURANDO ENTORNO VIRTUAL AUTOMÁTICO ===")
+    
+    # Directorio del entorno virtual
+    venv_dir = Path("venv_composicion")
+    
+    try:
+        # 1. Crear entorno virtual si no existe
+        if not venv_dir.exists():
+            print(f"Creando entorno virtual en: {venv_dir}")
+            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+            print("Entorno virtual creado exitosamente")
+        
+        # 2. Determinar ejecutable Python del entorno virtual
+        if sys.platform == "win32":
+            python_exe = venv_dir / "Scripts" / "python.exe"
+            pip_exe = venv_dir / "Scripts" / "pip.exe"
+        else:
+            python_exe = venv_dir / "bin" / "python"
+            pip_exe = venv_dir / "bin" / "pip"
+        
+        # 3. Instalar dependencias necesarias
+        required_packages = ["pandas", "openpyxl", "xlsxwriter", "numpy"]
+        
+        for package in required_packages:
+            print(f"Instalando {package}...")
+            try:
+                subprocess.run([str(pip_exe), "install", package], check=True, capture_output=True)
+                print(f"{package} instalado correctamente")
+            except subprocess.CalledProcessError as e:
+                print(f"Error instalando {package}: {e}")
+                return False        # 4. Re-ejecutar script con el Python del entorno virtual
+        print(f"Dependencias instaladas. Re-ejecutando script con entorno virtual...")
+        current_args = sys.argv.copy()
+        
+        # Ejecutar el script actual con el Python del entorno virtual
+        result = subprocess.run([str(python_exe)] + current_args, capture_output=False)
+        
+        # Si fue exitoso, notificar y salir
+        if result.returncode == 0:
+            print("[OK] Script ejecutado exitosamente con entorno virtual")
+        
+        sys.exit(result.returncode)
+        
+    except Exception as e:
+        print(f"Error configurando entorno virtual: {e}")
+        return False
+
+def check_and_install_dependencies():
+    """
+    Verifica las dependencias y las instala automáticamente si faltan
+    """
+    required_modules = {
+        'pandas': 'pandas',
+        'openpyxl': 'openpyxl', 
+        'xlsxwriter': 'xlsxwriter'
+    }
+    
+    missing_modules = []
+    
+    print("Verificando dependencias Python...")
+    
+    # Verificar cada módulo
+    for module_name, package_name in required_modules.items():
+        try:
+            __import__(module_name)
+            print(f"[OK] {module_name} disponible")
+        except ImportError:
+            print(f"[FALTA] {module_name} no encontrado")
+            missing_modules.append(package_name)
+    
+    # Si faltan módulos, forzar instalación automática inmediatamente
+    if missing_modules:
+        print(f"INSTALANDO AUTOMÁTICAMENTE: {', '.join(missing_modules)}")
+        print("Esto puede tomar unos momentos...")
+        
+        success = auto_install_packages(missing_modules)
+        if not success:
+            print("ERROR: Instalación automática falló, creando entorno virtual...")
+            return setup_virtual_environment()
+        
+        # Verificar nuevamente después de instalación
+        print("Verificando instalación...")
+        for module_name in required_modules.keys():
+            try:
+                __import__(module_name)
+                print(f"[INSTALADO] {module_name} ahora disponible")
+            except ImportError:
+                print(f"[ERROR] {module_name} aún no disponible después de instalación")
+                return setup_virtual_environment()
+        
+        return True
+    else:
+        print("Todas las dependencias están disponibles")
+        return True
+
+def auto_install_packages(packages):
+    """
+    Instala paquetes automáticamente usando pip
+    """
+    import subprocess
+    import sys
+    
+    print("Iniciando instalación automática de dependencias...")
+    
+    # Intentar actualizar pip primero
+    try:
+        print("Actualizando pip...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], 
+                      check=True, capture_output=True)
+        print("Pip actualizado correctamente")
+    except subprocess.CalledProcessError:
+        print("Advertencia: No se pudo actualizar pip, continuando...")
+    
+    # Instalar cada paquete
+    for package in packages:
+        try:
+            print(f"Instalando {package}...")
+            
+            # Usar múltiples métodos de instalación
+            commands_to_try = [
+                [sys.executable, "-m", "pip", "install", package],
+                [sys.executable, "-m", "pip", "install", "--user", package],
+                ["py", "-m", "pip", "install", package]
+            ]
+            
+            success = False
+            for cmd in commands_to_try:
+                try:
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    print(f"[ÉXITO] {package} instalado con: {' '.join(cmd)}")
+                    success = True
+                    break
+                except subprocess.CalledProcessError as e:
+                    print(f"Intento fallido con {' '.join(cmd)}: {e}")
+                    continue
+                except FileNotFoundError:
+                    print(f"Comando no encontrado: {' '.join(cmd)}")
+                    continue
+            
+            if not success:
+                print(f"ERROR: No se pudo instalar {package} con ningún método")
+                print("Cambiando a entorno virtual...")
+                return setup_virtual_environment()
+            
+        except Exception as e:
+            print(f"Error inesperado instalando {package}: {e}")
+            return setup_virtual_environment()
+    
+    print("Instalación automática completada")
+    
+    # Verificar que la instalación fue exitosa
+    print("Verificando instalación...")
+    try:
+        # Forzar recarga de módulos
+        import importlib
+        import sys
+        
+        # Limpiar cache de importaciones
+        for module_name in ['pandas', 'openpyxl', 'xlsxwriter', 'numpy']:
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+        
+        # Intentar importar pandas
+        import pandas as pd
+        print("ÉXITO: Pandas importado correctamente después de instalación")
+        
+        # Forzar salida exitosa para notificar a Java
+        print("[OK] Todas las dependencias han sido instaladas y verificadas")
+        return True
+        
+    except ImportError as e:
+        print(f"ERROR: Pandas aún no disponible después de instalación: {e}")
+        print("Creando entorno virtual como alternativa...")
+        return setup_virtual_environment()
+
+def handle_numpy_conflict():
+    """
+    Maneja específicamente el conflicto de numpy source directory
+    """
+    import os
+    import sys
+    from pathlib import Path
+    
+    current_dir = Path.cwd()
+    print(f"📍 Directorio actual: {current_dir}")
+    
+    # Verificar si estamos en un directorio problemático
+    problematic_patterns = ["numpy", "site-packages", "python"]
+    
+    for pattern in problematic_patterns:
+        if pattern.lower() in str(current_dir).lower():
+            print(f"Detectado directorio problemático que contiene '{pattern}'")
+            
+            # Cambiar a un directorio temporal seguro
+            safe_dir = Path.home() / "temp_composicion_work"
+            safe_dir.mkdir(exist_ok=True)
+            
+            print(f"Cambiando a directorio seguro: {safe_dir}")
+            os.chdir(safe_dir)
+            
+            # Copiar archivos necesarios
+            import shutil
+            script_path = Path(sys.argv[0])
+            excel_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+            
+            if script_path.exists():
+                shutil.copy2(script_path, safe_dir)
+            if excel_path and excel_path.exists():
+                shutil.copy2(excel_path, safe_dir)
+            
+            print("Archivos copiados al directorio seguro")
+            return True
+    
+    return False
+
+def initialize_environment():
+    """
+    Inicializa el entorno de ejecución verificando y configurando dependencias
+    """
+    try:
+        # Intentar importar pandas normalmente primero
+        import pandas as pd
+        print("Pandas disponible - continuando ejecución normal")
+        return True
+        
+    except ImportError as e:
+        error_msg = str(e).lower()
+        
+        # Detectar tipo específico de error
+        if "numpy" in error_msg and "source directory" in error_msg:
+            print("Detectado conflicto de numpy - aplicando solución automática...")
+            if handle_numpy_conflict():
+                print("Conflicto de numpy resuelto")
+            return setup_virtual_environment()
+            
+        elif "no module named" in error_msg:
+            print("Detectadas dependencias faltantes - instalando automáticamente...")
+            return check_and_install_dependencies()
+            
+        else:
+            print(f"Error de importación no manejado: {e}")
+            return setup_virtual_environment()
+
+# === INICIALIZACIÓN AUTOMÁTICA ===
+# Ejecutar verificación de dependencias antes de continuar
+print("=== INICIANDO SCRIPT CON AUTO-REPARACIÓN ===")
+print("Verificando dependencias...")
+
+if not initialize_environment():
+    print("No se pudo configurar el entorno automáticamente")
+    print("SOLUCIONES MANUALES:")
+    print("   1. Ejecutar desde un directorio diferente")
+    print("   2. py -m pip install pandas openpyxl xlsxwriter")
+    print("   3. Crear entorno virtual manualmente")
+    sys.exit(1)
+
+print("Dependencias verificadas correctamente")
+
+# Importar pandas después de verificar/configurar el entorno
+try:
+    import pandas as pd
+    print("Pandas importado exitosamente")
+except ImportError as e:
+    print(f"Error crítico: No se puede importar pandas después de verificación: {e}")
+    print("Forzando creación de entorno virtual...")
+    setup_virtual_environment()
 
 # Configurar codificación para compatibilidad con Java
 import io
@@ -239,9 +515,14 @@ def normalize_name(name):
 
 def main():
     """Función principal"""
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print("[ERROR] Uso: python fix_dra_blue_dynamic.py <archivo_excel>")
         return False
+    
+    # Permitir modo de solo verificación de dependencias
+    if len(sys.argv) == 2 and sys.argv[1] == "--check-deps":
+        print("[OK] Dependencias verificadas correctamente")
+        return True
     
     excel_file = sys.argv[1]
     
