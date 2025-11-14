@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -133,18 +134,28 @@ public class PdfOwnershipReportGenerator {
             rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
             
             try {
-                // Intentar cargar el logo desde el directorio del JAR
-                String logoPath = "Imagen1.png";
-                File logoFile = new File(logoPath);
-                
-                if (logoFile.exists()) {
-                    Image logo = Image.getInstance(logoPath);
+                // Intentar cargar el logo desde los recursos del JAR
+                InputStream logoStream = getClass().getResourceAsStream("/Imagen1.png");
+                if (logoStream != null) {
+                    Image logo = Image.getInstance(logoStream.readAllBytes());
                     // Ajustar tamaño del logo (escalado al 30%)
                     logo.scalePercent(30);
                     logo.setAlignment(Element.ALIGN_RIGHT);
                     rightCell.addElement(logo);
+                    logoStream.close();
                 } else {
-                    logger.warn("Logo no encontrado en: {}", logoPath);
+                    // Fallback: buscar en el directorio actual
+                    String logoPath = "Imagen1.png";
+                    File logoFile = new File(logoPath);
+                    
+                    if (logoFile.exists()) {
+                        Image logo = Image.getInstance(logoPath);
+                        logo.scalePercent(30);
+                        logo.setAlignment(Element.ALIGN_RIGHT);
+                        rightCell.addElement(logo);
+                    } else {
+                        logger.warn("Logo no encontrado en recursos ni en: {}", logoPath);
+                    }
                 }
             } catch (Exception e) {
                 logger.warn("No se pudo cargar el logo: {}", e.getMessage());
