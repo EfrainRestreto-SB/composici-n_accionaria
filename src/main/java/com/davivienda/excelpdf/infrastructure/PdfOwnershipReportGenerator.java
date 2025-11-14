@@ -49,7 +49,10 @@ public class PdfOwnershipReportGenerator {
     // Colores corporativos
     private static final Color DAVIVIENDA_RED = new Color(204, 0, 51);
     private static final Color HEADER_GRAY = new Color(128, 128, 128);
-    private static final Color LIGHT_GRAY = new Color(245, 245, 245);
+    
+    // ============================================================
+    // ============== MÉTODOS PÚBLICOS PRINCIPALES ===============
+    // ============================================================
     
     /**
      * Genera un reporte PDF con los resultados del análisis de composición accionaria.
@@ -58,6 +61,8 @@ public class PdfOwnershipReportGenerator {
      * @param beneficiaryPaths mapa de beneficiario -> ruta completa
      * @param rootEntity nombre de la entidad raíz analizada
      * @param outputPath ruta del archivo PDF de salida
+     * @param originalData datos originales del Excel (no utilizado)
+     * @param dataXlsxRows filas de datos del Excel
      * @throws IOException si hay problemas escribiendo el archivo
      */
     public void generateOwnershipReport(Map<String, Double> finalResults,
@@ -86,8 +91,8 @@ public class PdfOwnershipReportGenerator {
             
             // Agregar contenido al documento
             addHeader(document, rootEntity);
-            addSummary(document, finalResults, rootEntity);
-            addDetailedBreakdown(document, originalData, rootEntity, dataXlsxRows);
+            addSummary(document, finalResults);
+            addDetailedBreakdown(document, dataXlsxRows);
             addDetailedResults(document, finalResults, beneficiaryPaths);
             addFooter(document, writer);
             
@@ -99,6 +104,10 @@ public class PdfOwnershipReportGenerator {
             throw new IOException("Error creando el documento PDF: " + e.getMessage(), e);
         }
     }
+    
+    // ============================================================
+    // ========= MÉTODOS PRIVADOS DE CONSTRUCCIÓN DE PDF =========
+    // ============================================================
     
     /**
      * Agrega el encabezado del documento con logo.
@@ -134,28 +143,11 @@ public class PdfOwnershipReportGenerator {
             rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
             
             try {
-                // Intentar cargar el logo desde los recursos del JAR
-                InputStream logoStream = getClass().getResourceAsStream("/Imagen1.png");
-                if (logoStream != null) {
-                    Image logo = Image.getInstance(logoStream.readAllBytes());
-                    // Ajustar tamaño del logo (escalado al 30%)
+                Image logo = loadLogoImage();
+                if (logo != null) {
                     logo.scalePercent(30);
                     logo.setAlignment(Element.ALIGN_RIGHT);
                     rightCell.addElement(logo);
-                    logoStream.close();
-                } else {
-                    // Fallback: buscar en el directorio actual
-                    String logoPath = "Imagen1.png";
-                    File logoFile = new File(logoPath);
-                    
-                    if (logoFile.exists()) {
-                        Image logo = Image.getInstance(logoPath);
-                        logo.scalePercent(30);
-                        logo.setAlignment(Element.ALIGN_RIGHT);
-                        rightCell.addElement(logo);
-                    } else {
-                        logger.warn("Logo no encontrado en recursos ni en: {}", logoPath);
-                    }
                 }
             } catch (Exception e) {
                 logger.warn("No se pudo cargar el logo: {}", e.getMessage());
@@ -191,7 +183,7 @@ public class PdfOwnershipReportGenerator {
     /**
      * Agrega el resumen ejecutivo.
      */
-    private void addSummary(Document document, Map<String, Double> finalResults, String rootEntity) 
+    private void addSummary(Document document, Map<String, Double> finalResults) 
             throws DocumentException {
         
         Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, DAVIVIENDA_RED);
@@ -256,23 +248,9 @@ public class PdfOwnershipReportGenerator {
         // Encabezados de tabla
         Font tableHeaderFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
         
-        PdfPCell headerCell1 = new PdfPCell(new Phrase("BENEFICIARIO FINAL", tableHeaderFont));
-        headerCell1.setBackgroundColor(DAVIVIENDA_RED);
-        headerCell1.setPadding(8);
-        headerCell1.setHorizontalAlignment(Element.ALIGN_CENTER);
-        table.addCell(headerCell1);
-        
-        PdfPCell headerCell2 = new PdfPCell(new Phrase("PARTICIPACIÓN", tableHeaderFont));
-        headerCell2.setBackgroundColor(DAVIVIENDA_RED);
-        headerCell2.setPadding(8);
-        headerCell2.setHorizontalAlignment(Element.ALIGN_CENTER);
-        table.addCell(headerCell2);
-        
-        PdfPCell headerCell3 = new PdfPCell(new Phrase("RUTA DE PARTICIPACIÓN", tableHeaderFont));
-        headerCell3.setBackgroundColor(DAVIVIENDA_RED);
-        headerCell3.setPadding(8);
-        headerCell3.setHorizontalAlignment(Element.ALIGN_CENTER);
-        table.addCell(headerCell3);
+        table.addCell(createHeaderCell("BENEFICIARIO FINAL", tableHeaderFont));
+        table.addCell(createHeaderCell("PARTICIPACIÓN", tableHeaderFont));
+        table.addCell(createHeaderCell("RUTA DE PARTICIPACIÓN", tableHeaderFont));
         
         // Ordenar resultados por porcentaje descendente
         finalResults.entrySet().stream()
@@ -372,7 +350,7 @@ public class PdfOwnershipReportGenerator {
     /**
      * Añade la tabla detallada de desglose de composición accionaria replicando dinámicamente todas las filas de data.xlsx
      */
-    private void addDetailedBreakdown(Document document, Map<String, Map<String, Double>> originalData, String rootEntity, java.util.List<String[]> dataXlsxRows) 
+    private void addDetailedBreakdown(Document document, java.util.List<String[]> dataXlsxRows) 
             throws DocumentException {
         
         logger.info("Añadiendo tabla de desglose de composición accionaria...");
@@ -449,5 +427,55 @@ public class PdfOwnershipReportGenerator {
         // Añadir la tabla al documento
         document.add(table);
         logger.info("Tabla de desglose añadida exitosamente");
+    }
+    
+    // ============================================================
+    // =============== MÉTODOS HELPER DE UTILIDAD =================
+    // ============================================================
+    
+    /**
+     * Crea una celda de encabezado estándar para tablas PDF.
+     * 
+     * @param text texto del encabezado
+     * @param font fuente a utilizar
+     * @return celda configurada
+     */
+    private PdfPCell createHeaderCell(String text, Font font) {
+        PdfPCell headerCell = new PdfPCell(new Phrase(text, font));
+        headerCell.setBackgroundColor(DAVIVIENDA_RED);
+        headerCell.setPadding(8);
+        headerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        return headerCell;
+    }
+    
+    /**
+     * Carga la imagen del logo desde recursos del JAR o directorio actual.
+     * 
+     * @return imagen del logo o null si no se encuentra
+     * @throws Exception si hay error cargando la imagen
+     */
+    private Image loadLogoImage() throws Exception {
+        // Intentar cargar el logo desde los recursos del JAR
+        InputStream logoStream = getClass().getResourceAsStream("/Imagen1.png");
+        if (logoStream != null) {
+            try {
+                Image logo = Image.getInstance(logoStream.readAllBytes());
+                logoStream.close();
+                return logo;
+            } finally {
+                logoStream.close();
+            }
+        }
+        
+        // Fallback: buscar en el directorio actual
+        String logoPath = "Imagen1.png";
+        File logoFile = new File(logoPath);
+        
+        if (logoFile.exists()) {
+            return Image.getInstance(logoPath);
+        } else {
+            logger.warn("Logo no encontrado en recursos ni en: {}", logoPath);
+            return null;
+        }
     }
 }
