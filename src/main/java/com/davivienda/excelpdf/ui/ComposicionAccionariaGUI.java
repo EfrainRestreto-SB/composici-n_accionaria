@@ -721,8 +721,20 @@ public class ComposicionAccionariaGUI extends JFrame {
             appendLog("⚠️ ADVERTENCIA: Ejecutándose desde red compartida - esto puede causar restricciones");
         }
         
-        // 2. Intentar detectar comando Python funcional
-        String[] pythonCommands = {"py", "python", "python3"};
+        // 2. Usar Python Portable con fallback al sistema
+        String portablePythonPath = "C:\\ComposicionAccionaria\\python-portable\\python311\\python.exe";
+        String[] pythonCommands;
+        
+        // Verificar si existe Python Portable
+        File portablePython = new File(portablePythonPath);
+        if (portablePython.exists()) {
+            appendLog("🔧 Usando Python Portable desde: " + portablePythonPath);
+            pythonCommands = new String[]{portablePythonPath};
+        } else {
+            appendLog("⚠️ Python Portable no encontrado, usando Python del sistema");
+            pythonCommands = new String[]{"py", "python", "python3"};
+        }
+        
         String workingPythonCommand = null;
         
         for (String cmd : pythonCommands) {

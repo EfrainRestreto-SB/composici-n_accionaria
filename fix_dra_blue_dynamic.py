@@ -263,29 +263,18 @@ def initialize_environment():
             print(f"Error de importación no manejado: {e}")
             return setup_virtual_environment()
 
-# === INICIALIZACIÓN AUTOMÁTICA ===
-# Ejecutar verificación de dependencias antes de continuar
-print("=== INICIANDO SCRIPT CON AUTO-REPARACIÓN ===")
-print("Verificando dependencias...")
+# === INICIALIZACIÓN DIRECTA (PYTHON PORTABLE) ===
+# Con Python Portable todas las dependencias ya están instaladas
+print("=== INICIANDO SCRIPT CON PYTHON PORTABLE ===")
 
-if not initialize_environment():
-    print("No se pudo configurar el entorno automáticamente")
-    print("SOLUCIONES MANUALES:")
-    print("   1. Ejecutar desde un directorio diferente")
-    print("   2. py -m pip install pandas openpyxl xlsxwriter")
-    print("   3. Crear entorno virtual manualmente")
-    sys.exit(1)
-
-print("Dependencias verificadas correctamente")
-
-# Importar pandas después de verificar/configurar el entorno
+# Importar pandas directamente (ya disponible en Python Portable)
 try:
     import pandas as pd
-    print("Pandas importado exitosamente")
+    print("Pandas importado exitosamente desde Python Portable")
 except ImportError as e:
-    print(f"Error crítico: No se puede importar pandas después de verificación: {e}")
-    print("Forzando creación de entorno virtual...")
-    setup_virtual_environment()
+    print(f"Error crítico: No se puede importar pandas: {e}")
+    print("Verificar que Python Portable esté configurado correctamente")
+    sys.exit(1)
 
 # Configurar codificación para compatibilidad con Java
 import io
@@ -350,6 +339,18 @@ def extract_final_beneficiaries(df):
         # Saltar filas sin datos útiles
         if not entidad or entidad == "nan":
             continue
+        
+        # Limpiar y convertir participación final a número
+        if participacion_final is not None:
+            try:
+                # Convertir a string primero, luego a float
+                participacion_final_str = str(participacion_final).strip()
+                if participacion_final_str and participacion_final_str != "nan" and participacion_final_str != "":
+                    participacion_final = float(participacion_final_str)
+                else:
+                    participacion_final = None
+            except (ValueError, TypeError):
+                participacion_final = None
             
         # Detectar beneficiarios finales: tienen participación final pero no son entidades de primer nivel
         if participacion_final is not None and participacion_final > 0:
