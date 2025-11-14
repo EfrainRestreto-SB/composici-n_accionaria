@@ -142,7 +142,7 @@ public class ComposicionAccionariaGUI extends JFrame {
                 return logoLabel;
             }
         } catch (Exception e) {
-            appendLog("⚠️ No se pudo cargar el logo: " + e.getMessage());
+            appendLog("ADVERTENCIA: No se pudo cargar el logo: " + e.getMessage());
         }
         return null;
     }
@@ -364,9 +364,9 @@ public class ComposicionAccionariaGUI extends JFrame {
                         publish("Archivo corregido: " + archivoCorregido);
                         archivoParaProcesar = archivoCorregido;
                     } catch (Exception e) {
-                        publish(" ❌ ERROR CRÍTICO: No se pudo generar el archivo corregido");
+                        publish(" ERROR CRÍTICO: No se pudo generar el archivo corregido");
                         publish(" Motivo: " + e.getMessage());
-                        publish(" ⚠️ PDF NO GENERADO debido a error en corrección del archivo");
+                        publish(" ADVERTENCIA: PDF NO GENERADO debido a error en corrección del archivo");
                         throw new Exception("No se pudo generar el archivo corregido para data.xlsx: " + e.getMessage());
                     }
                 } else {
@@ -386,9 +386,9 @@ public class ComposicionAccionariaGUI extends JFrame {
                             publish(" No se requieren correcciones para este archivo");
                         }
                     } catch (Exception e) {
-                        publish(" ❌ ERROR CRÍTICO: No se pudieron aplicar las correcciones necesarias");
+                        publish(" ERROR CRÍTICO: No se pudieron aplicar las correcciones necesarias");
                         publish(" Motivo: " + e.getMessage());
-                        publish(" ⚠️ PDF NO GENERADO debido a error en corrección del archivo");
+                        publish(" ADVERTENCIA: PDF NO GENERADO debido a error en corrección del archivo");
                         throw new Exception("No se pudieron aplicar las correcciones al archivo: " + e.getMessage());
                     }
                 }
@@ -456,7 +456,7 @@ public class ComposicionAccionariaGUI extends JFrame {
                     progressBar.setValue(0);
                     
                     String errorMessage = e.getMessage();
-                    appendLog("\n❌ ERROR CRÍTICO: " + errorMessage);
+                    appendLog("\nERROR CRÍTICO: " + errorMessage);
                     
                     // Determinar el tipo de error para mostrar mensaje apropiado
                     String userMessage;
@@ -464,7 +464,7 @@ public class ComposicionAccionariaGUI extends JFrame {
                         userMessage = "Error al generar archivo corregido.\n\n" +
                                     "PDF NO GENERADO debido a fallos en la corrección del Excel.\n\n" +
                                     "Detalles: " + errorMessage;
-                        appendLog("⚠️ IMPORTANTE: El PDF no fue generado debido a errores en la corrección del archivo Excel");
+                        appendLog("IMPORTANTE: El PDF no fue generado debido a errores en la corrección del archivo Excel");
                     } else {
                         userMessage = "Error durante el procesamiento del análisis:\n" + errorMessage;
                         
@@ -601,124 +601,97 @@ public class ComposicionAccionariaGUI extends JFrame {
      * Siempre produce data_cleaned_fixed.xlsx limpio y listo para procesar
      */
     private String generarArchivoCorregido(String excelPath) throws Exception {
-        // Primero validar entorno Python
         String pythonCommand = validarEntornoPython();
         
         try {
             appendLog(" Generando archivo corregido desde: " + new File(excelPath).getName());
-            appendLog(" Comando Python detectado: " + pythonCommand);
-            appendLog(" Directorio de trabajo: " + System.getProperty("user.dir"));
             
             ProcessBuilder pb = new ProcessBuilder(pythonCommand, "fix_dra_blue_dynamic.py", excelPath);
             pb.directory(new File(System.getProperty("user.dir")));
             pb.redirectErrorStream(true);
             
             Process process = pb.start();
-            
-            // Capturar toda la salida del proceso para análisis detallado
-            StringBuilder outputBuffer = new StringBuilder();
-            StringBuilder errorBuffer = new StringBuilder();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
-            String line;
-            
-            while ((line = reader.readLine()) != null) {
-                outputBuffer.append(line).append("\n");
-                appendLog("Python: " + line);
-                
-                // Clasificar tipos de error para mejor diagnóstico
-                String lowerLine = line.toLowerCase();
-                if (lowerLine.contains("error") || lowerLine.contains("traceback") || 
-                    lowerLine.contains("exception") || lowerLine.contains("failed")) {
-                    errorBuffer.append(line).append("\n");
-                }
-            }
-            
+            StringBuilder outputBuffer = procesarSalidaPython(process);
             int exitCode = process.waitFor();
             
             if (exitCode == 0) {
-                String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
-                if (new File(correctedPath).exists()) {
-                    appendLog(" ✅ Archivo corregido generado exitosamente: " + new File(correctedPath).getName());
-                    appendLog(" Ubicación: " + correctedPath);
-                    return correctedPath;
-                } else {
-                    String errorMsg = "El archivo corregido no se generó correctamente";
-                    appendLog(" ❌ Error: " + errorMsg);
-                    appendLog(" 🔍 Salida completa del script Python:");
-                    appendLog(outputBuffer.toString());
-                    throw new Exception(errorMsg + "\nSalida Python: " + outputBuffer.toString());
-                }
+                return validarArchivoCorregidoGenerado(excelPath, outputBuffer);
             } else {
-                // Construir mensaje de error detallado
-                StringBuilder detailedError = new StringBuilder();
-                detailedError.append("Script Python falló con código de salida: ").append(exitCode).append("\n");
-                
-                // Analizar tipos específicos de error
-                String fullOutput = outputBuffer.toString();
-                if (fullOutput.contains("ImportError") || fullOutput.contains("ModuleNotFoundError")) {
-                    detailedError.append("CAUSA: Error de importación de módulos Python\n");
-                    detailedError.append("POSIBLES SOLUCIONES:\n");
-                    detailedError.append("- Verificar que todas las dependencias estén instaladas\n");
-                    detailedError.append("- Ejecutar: py -m pip install pandas openpyxl xlsxwriter\n");
-                } else if (fullOutput.contains("FileNotFoundError") || fullOutput.contains("No such file")) {
-                    detailedError.append("CAUSA: Archivo no encontrado\n");
-                    detailedError.append("POSIBLES SOLUCIONES:\n");
-                    detailedError.append("- Verificar que el archivo data.xlsx esté en la ubicación correcta\n");
-                    detailedError.append("- Verificar permisos de lectura/escritura en el directorio\n");
-                } else if (fullOutput.contains("PermissionError") || fullOutput.contains("Access denied")) {
-                    detailedError.append("CAUSA: Error de permisos\n");
-                    detailedError.append("POSIBLES SOLUCIONES:\n");
-                    detailedError.append("- Ejecutar como administrador\n");
-                    detailedError.append("- Cerrar el archivo Excel si está abierto\n");
-                    detailedError.append("- Verificar permisos de escritura en el directorio\n");
-                } else if (fullOutput.contains("numpy") && fullOutput.contains("source directory")) {
-                    detailedError.append("CAUSA: Conflicto con instalación de numpy\n");
-                    detailedError.append("POSIBLES SOLUCIONES:\n");
-                    detailedError.append("- Cambiar a un directorio sin conflictos de numpy\n");
-                    detailedError.append("- Ejecutar: py -m pip uninstall numpy && py -m pip install numpy\n");
-                    detailedError.append("- Usar un entorno virtual limpio\n");
-                } else if (fullOutput.contains("SyntaxError")) {
-                    detailedError.append("CAUSA: Error de sintaxis en el script Python\n");
-                    detailedError.append("POSIBLES SOLUCIONES:\n");
-                    detailedError.append("- Verificar que el script fix_dra_blue_dynamic.py no esté corrupto\n");
-                } else {
-                    detailedError.append("CAUSA: Error no específico\n");
-                    detailedError.append("Ver salida completa para más detalles\n");
-                }
-                
-                detailedError.append("\n--- SALIDA COMPLETA DEL SCRIPT PYTHON ---\n");
-                detailedError.append(fullOutput);
-                
-                if (errorBuffer.length() > 0) {
-                    detailedError.append("\n--- ERRORES DETECTADOS ---\n");
-                    detailedError.append(errorBuffer.toString());
-                }
-                
-                String errorMsg = detailedError.toString();
-                appendLog(" ❌ ANÁLISIS DETALLADO DEL ERROR:");
-                appendLog(errorMsg);
-                
-                throw new Exception("Error en generación de archivo corregido: " + errorMsg);
+                throw new Exception(construirMensajeErrorPython(exitCode, outputBuffer));
             }
         } catch (Exception e) {
             String errorMsg = "Error ejecutando script de corrección: " + e.getMessage();
-            appendLog(" ❌ " + errorMsg);
+            appendLog(" ERROR: " + errorMsg);
             throw new Exception(errorMsg);
         }
+    }
+    /**
+     * Procesa la salida del script Python capturando toda la información
+     */
+    private StringBuilder procesarSalidaPython(Process process) throws Exception {
+        StringBuilder outputBuffer = new StringBuilder();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
+        String line;
+        
+        while ((line = reader.readLine()) != null) {
+            outputBuffer.append(line).append("\n");
+            appendLog("Python: " + line);
+        }
+        
+        return outputBuffer;
+    }
+
+    /**
+     * Valida que el archivo corregido se haya generado correctamente
+     */
+    private String validarArchivoCorregidoGenerado(String excelPath, StringBuilder outputBuffer) throws Exception {
+        String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+        if (new File(correctedPath).exists()) {
+            appendLog(" ÉXITO: Archivo corregido generado exitosamente: " + new File(correctedPath).getName());
+            return correctedPath;
+        } else {
+            String errorMsg = "El archivo corregido no se generó correctamente";
+            appendLog(" ERROR: " + errorMsg);
+            appendLog(" DETALLE: Salida completa del script Python:");
+            appendLog(outputBuffer.toString());
+            throw new Exception(errorMsg + "\nSalida Python: " + outputBuffer.toString());
+        }
+    }
+
+    /**
+     * Construye un mensaje de error detallado basado en la salida de Python
+     */
+    private String construirMensajeErrorPython(int exitCode, StringBuilder outputBuffer) {
+        StringBuilder detailedError = new StringBuilder();
+        detailedError.append("Script Python falló con código de salida: ").append(exitCode).append("\n");
+        
+        String fullOutput = outputBuffer.toString();
+        if (fullOutput.contains("ImportError") || fullOutput.contains("ModuleNotFoundError")) {
+            detailedError.append("CAUSA: Error de importación de módulos Python\n");
+        } else if (fullOutput.contains("FileNotFoundError")) {
+            detailedError.append("CAUSA: Archivo no encontrado\n");
+        } else if (fullOutput.contains("PermissionError")) {
+            detailedError.append("CAUSA: Error de permisos\n");
+        } else {
+            detailedError.append("CAUSA: Error no específico\n");
+        }
+        
+        detailedError.append("\nSalida completa:\n").append(fullOutput);
+        return "Error en generación de archivo corregido: " + detailedError.toString();
     }
 
     /**
      * Valida que Python esté disponible y tenga las dependencias necesarias
      */
     private String validarEntornoPython() throws Exception {
-        appendLog("🔍 Iniciando validación del entorno Python...");
+        appendLog("Iniciando validación del entorno Python...");
         
         // 1. Detectar entorno de ejecución
         String currentDir = System.getProperty("user.dir");
-        appendLog("📍 Directorio actual: " + currentDir);
+        appendLog("Directorio actual: " + currentDir);
         
         if (currentDir.startsWith("\\\\")) {
-            appendLog("⚠️ ADVERTENCIA: Ejecutándose desde red compartida - esto puede causar restricciones");
+            appendLog("ADVERTENCIA: Ejecutándose desde red compartida - esto puede causar restricciones");
         }
         
         // 2. Usar Python Portable con fallback al sistema
@@ -728,10 +701,10 @@ public class ComposicionAccionariaGUI extends JFrame {
         // Verificar si existe Python Portable
         File portablePython = new File(portablePythonPath);
         if (portablePython.exists()) {
-            appendLog("🔧 Usando Python Portable desde: " + portablePythonPath);
+            appendLog("Usando Python Portable desde: " + portablePythonPath);
             pythonCommands = new String[]{portablePythonPath};
         } else {
-            appendLog("⚠️ Python Portable no encontrado, usando Python del sistema");
+            appendLog("ADVERTENCIA: Python Portable no encontrado, usando Python del sistema");
             pythonCommands = new String[]{"py", "python", "python3"};
         }
         
@@ -739,7 +712,7 @@ public class ComposicionAccionariaGUI extends JFrame {
         
         for (String cmd : pythonCommands) {
             try {
-                appendLog("🐍 Probando comando: " + cmd);
+                appendLog("Probando comando: " + cmd);
                 ProcessBuilder pb = new ProcessBuilder(cmd, "--version");
                 pb.directory(new File(System.getProperty("user.dir")));
                 Process process = pb.start();
@@ -750,19 +723,19 @@ public class ComposicionAccionariaGUI extends JFrame {
                 
                 int exitCode = process.waitFor();
                 if (exitCode == 0) {
-                    appendLog("✅ " + cmd + " funcional - " + (version != null ? version : "Versión detectada"));
+                    appendLog("ÉXITO: " + cmd + " funcional - " + (version != null ? version : "Versión detectada"));
                     workingPythonCommand = cmd;
                     break;
                 } else {
-                    appendLog("❌ " + cmd + " falló con código: " + exitCode);
+                    appendLog("ERROR: " + cmd + " falló con código: " + exitCode);
                 }
             } catch (Exception e) {
-                appendLog("❌ " + cmd + " no disponible: " + e.getMessage());
+                appendLog("ERROR: " + cmd + " no disponible: " + e.getMessage());
             }
         }
         
         if (workingPythonCommand == null) {
-            String error = "❌ PYTHON NO DISPONIBLE: No se encontró ningún comando Python funcional (py, python, python3)";
+            String error = "ERROR: PYTHON NO DISPONIBLE: No se encontró ningún comando Python funcional (py, python, python3)";
             appendLog(error);
             throw new Exception("Python no está instalado o no está accesible desde PATH. " +
                               "Instale Python desde python.org y asegúrese de marcarlo 'Add Python to PATH'");
@@ -772,7 +745,7 @@ public class ComposicionAccionariaGUI extends JFrame {
         String[] requiredPackages = {"pandas", "openpyxl", "xlsxwriter"};
         for (String pkg : requiredPackages) {
             if (!verificarPaquetePythonAlternativo(workingPythonCommand, pkg)) {
-                String error = "❌ DEPENDENCIA FALTANTE: " + pkg;
+                String error = "ERROR: DEPENDENCIA FALTANTE: " + pkg;
                 appendLog(error);
                 throw new Exception("Falta la dependencia Python: " + pkg + ". " +
                                   "Ejecute: " + workingPythonCommand + " -m pip install " + pkg);
@@ -782,15 +755,15 @@ public class ComposicionAccionariaGUI extends JFrame {
         // 4. Verificar que el script Python existe
         File scriptFile = new File(System.getProperty("user.dir"), "fix_dra_blue_dynamic.py");
         if (!scriptFile.exists()) {
-            String error = "❌ SCRIPT FALTANTE: fix_dra_blue_dynamic.py no encontrado";
+            String error = "ERROR: SCRIPT FALTANTE: fix_dra_blue_dynamic.py no encontrado";
             appendLog(error);
             throw new Exception("Script 'fix_dra_blue_dynamic.py' no encontrado en: " + scriptFile.getAbsolutePath());
         } else {
-            appendLog("✅ Script Python encontrado: " + scriptFile.getName());
+            appendLog("ÉXITO: Script Python encontrado: " + scriptFile.getName());
         }
         
-        appendLog("✅ Validación del entorno Python completada exitosamente");
-        appendLog("🎯 Comando Python a usar: " + workingPythonCommand);
+        appendLog("ÉXITO: Validación del entorno Python completada exitosamente");
+        appendLog("Comando Python a usar: " + workingPythonCommand);
         
         return workingPythonCommand;
     }
@@ -800,7 +773,7 @@ public class ComposicionAccionariaGUI extends JFrame {
      */
     private boolean verificarPaquetePythonAlternativo(String pythonCommand, String packageName) {
         try {
-            appendLog("📦 Verificando paquete: " + packageName);
+            appendLog("Verificando paquete: " + packageName);
             
             // Usar método de importación simple sin salida de texto problemática
             ProcessBuilder pb = new ProcessBuilder(pythonCommand, "-c", 
@@ -811,16 +784,16 @@ public class ComposicionAccionariaGUI extends JFrame {
             int exitCode = process.waitFor();
             
             if (exitCode == 0) {
-                appendLog("   ✅ " + packageName + " está disponible");
+                appendLog("   ÉXITO: " + packageName + " está disponible");
                 return true;
             } else {
-                appendLog("   ❌ " + packageName + " no está disponible (código: " + exitCode + ")");
+                appendLog("   ERROR: " + packageName + " no está disponible (código: " + exitCode + ")");
                 
                 // Intentar método de verificación con pip list como fallback
                 return verificarConPipList(pythonCommand, packageName);
             }
         } catch (Exception e) {
-            appendLog("   ❌ Error verificando " + packageName + ": " + e.getMessage());
+            appendLog("   ERROR: Error verificando " + packageName + ": " + e.getMessage());
             return verificarConPipList(pythonCommand, packageName);
         }
     }
@@ -830,7 +803,7 @@ public class ComposicionAccionariaGUI extends JFrame {
      */
     private boolean verificarConPipList(String pythonCommand, String packageName) {
         try {
-            appendLog("   🔄 Verificando " + packageName + " con pip list...");
+            appendLog("   Reintentando: Verificando " + packageName + " con pip list...");
             ProcessBuilder pb = new ProcessBuilder(pythonCommand, "-m", "pip", "list");
             pb.directory(new File(System.getProperty("user.dir")));
             
@@ -840,66 +813,20 @@ public class ComposicionAccionariaGUI extends JFrame {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.toLowerCase().contains(packageName.toLowerCase())) {
-                    appendLog("   ✅ " + packageName + " encontrado en pip list");
+                    appendLog("   ÉXITO: " + packageName + " encontrado en pip list");
                     return true;
                 }
             }
             
             int exitCode = process.waitFor();
             if (exitCode == 0) {
-                appendLog("   ❌ " + packageName + " no encontrado en pip list");
+                appendLog("   ERROR: " + packageName + " no encontrado en pip list");
             } else {
-                appendLog("   ❌ Error ejecutando pip list (código: " + exitCode + ")");
+                appendLog("   ERROR: Error ejecutando pip list (código: " + exitCode + ")");
             }
             return false;
         } catch (Exception e) {
-            appendLog("   ❌ Error en verificación con pip: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Verifica si un paquete Python específico está instalado
-     */
-    private boolean verificarPaquetePython(String pythonCommand, String packageName) {
-        try {
-            appendLog("📦 Verificando paquete: " + packageName);
-            
-            // Usar comando más simple sin emojis para evitar problemas de codificación
-            ProcessBuilder pb = new ProcessBuilder(pythonCommand, "-c", 
-                "import " + packageName + "; print('" + packageName + " OK')");
-            pb.directory(new File(System.getProperty("user.dir")));
-            pb.redirectErrorStream(true);
-            
-            Process process = pb.start();
-            
-            // Leer salida
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
-            String line;
-            boolean packageFound = false;
-            while ((line = reader.readLine()) != null) {
-                appendLog("   Python: " + line);
-                if (line.contains(packageName + " OK")) {
-                    packageFound = true;
-                } else if (line.toLowerCase().contains("error") || line.toLowerCase().contains("traceback")) {
-                    // Solo log de errores críticos, no todos los mensajes
-                    if (line.toLowerCase().contains("modulenotfounderror") || 
-                        line.toLowerCase().contains("importerror")) {
-                        appendLog("   ❌ " + packageName + " no encontrado");
-                    }
-                }
-            }
-            
-            int exitCode = process.waitFor();
-            if (exitCode == 0 && packageFound) {
-                appendLog("   ✅ " + packageName + " verificado correctamente");
-                return true;
-            } else {
-                appendLog("   ❌ " + packageName + " no disponible (código: " + exitCode + ")");
-                return false;
-            }
-        } catch (Exception e) {
-            appendLog("   ❌ Error verificando " + packageName + ": " + e.getMessage());
+            appendLog("   ERROR: Error en verificación con pip: " + e.getMessage());
             return false;
         }
     }
@@ -951,13 +878,13 @@ public class ComposicionAccionariaGUI extends JFrame {
                 if (exitCode == 0) {
                     String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
                     if (new File(correctedPath).exists()) {
-                        appendLog(" ✅ Correcciones aplicadas exitosamente: " + new File(correctedPath).getName());
+                        appendLog(" ÉXITO: Correcciones aplicadas exitosamente: " + new File(correctedPath).getName());
                         appendLog(" Archivo corregido en: " + correctedPath);
                         return correctedPath;
                     } else {
                         String errorMsg = "El archivo corregido no se generó después de aplicar correcciones";
-                        appendLog(" ❌ Error: " + errorMsg);
-                        appendLog(" 🔍 Salida completa del script Python:");
+                        appendLog(" ERROR: " + errorMsg);
+                        appendLog(" DETALLE: Salida completa del script Python:");
                         appendLog(outputBuffer.toString());
                         throw new Exception(errorMsg + "\nSalida Python: " + outputBuffer.toString());
                     }
@@ -1004,7 +931,7 @@ public class ComposicionAccionariaGUI extends JFrame {
                     }
                     
                     String errorMsg = detailedError.toString();
-                    appendLog(" ❌ ANÁLISIS DETALLADO DEL ERROR:");
+                    appendLog(" ERROR: ANÁLISIS DETALLADO DEL ERROR:");
                     appendLog(errorMsg);
                     
                     throw new Exception("Error en correcciones automáticas: " + errorMsg);
@@ -1014,7 +941,7 @@ public class ComposicionAccionariaGUI extends JFrame {
             }
         } catch (Exception e) {
             String errorMsg = "Error aplicando correcciones: " + e.getMessage();
-            appendLog(" ❌ " + errorMsg);
+            appendLog(" ERROR: " + errorMsg);
             throw new Exception(errorMsg);
         }
         
