@@ -20,15 +20,31 @@ import com.davivienda.excelpdf.ui.ComposicionAccionariaGUI;
  * 
  * <p>Uso desde consola:
  * <pre>
- *   java -jar excel-pdf-processor-standalone.jar <archivo.xlsx> [entidad_raiz]
+ *   java -jar composicion-accionaria-optimizado.jar &lt;archivo.xlsx&gt; [entidad_raiz]
  * </pre>
  * 
  * Ejemplo:
  * <pre>
- *   java -jar excel-pdf-processor-standalone.jar datos.xlsx "RED COW INC"
+ *   java -jar composicion-accionaria-optimizado.jar datos.xlsx "RED COW INC"
  * </pre>
+ * 
+ * @author Davivienda
+ * @version 1.0.0
  */
 public class Main {
+    
+    // ============================================================
+    // ====================== CONSTANTES =========================
+    // ============================================================
+    
+    private static final String APP_VERSION = "1.0.0";
+    private static final String XLSX_EXTENSION = ".xlsx";
+    private static final String CLEANED_SUFFIX = "_cleaned_fixed.xlsx";
+    private static final String PDF_PREFIX = "composicion_accionaria_";
+    private static final String TIME_PATTERN = "HHmmss";
+    private static final int PROGRESS_BAR_WIDTH = 20;
+    private static final int MAX_DISPLAY_LENGTH = 30;
+    private static final int TOP_BENEFICIARIES_LIMIT = 5;
 
     /**
      * Método principal (punto de entrada del programa).
@@ -106,7 +122,7 @@ public class Main {
         System.out.println("        ANALISIS DE COMPOSICION ACCIONARIA          ");
         System.out.println("                    Davivienda                      ");
         System.out.println("════════════════════════════════════════════════════");
-        System.out.println("Version: 1.0.0");
+        System.out.println("Version: " + APP_VERSION);
         System.out.println("Java: " + System.getProperty("java.version"));
         System.out.println("OS: " + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
         System.out.println("════════════════════════════════════════════════════");
@@ -118,13 +134,13 @@ public class Main {
     private static void printUsageAndExit() {
         System.err.println(" Error: Falta el archivo Excel\n");
         System.err.println(" USO:");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar <archivo.xlsx> [entidad_raiz]\n");
+        System.err.println("   java -jar composicion-accionaria-optimizado.jar <archivo.xlsx> [entidad_raiz]\n");
         System.err.println(" PARÁMETROS:");
         System.err.println("   archivo.xlsx  : Archivo Excel con las relaciones de propiedad");
         System.err.println("   entidad_raiz  : (Opcional) Entidad desde la cual calcular participaciones\n");
         System.err.println(" EJEMPLOS:");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar datos.xlsx");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar datos.xlsx \"RED COW INC\"\n");
+        System.err.println("   java -jar composicion-accionaria-optimizado.jar datos.xlsx");
+        System.err.println("   java -jar composicion-accionaria-optimizado.jar datos.xlsx \"RED COW INC\"\n");
         System.err.println(" FORMATO DEL EXCEL:");
         System.err.println("   Columna A: Entidad");
         System.err.println("   Columna B: Accionista");
@@ -132,18 +148,7 @@ public class Main {
         System.exit(1);
     }
 
-    /**
-     * Imprime ejemplos adicionales de uso del programa.
-     */
-    private static void printUsageExamples() {
-        System.err.println(" EJEMPLOS DE USO:\n");
-        System.err.println("   Modo interactivo:");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar estructura.xlsx\n");
-        System.err.println("   Con entidad específica:");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar estructura.xlsx \"Empresa A\"\n");
-        System.err.println("   Con archivo de salida personalizado:");
-        System.err.println("   java -jar excel-pdf-processor-standalone.jar estructura.xlsx \"Empresa A\" mi_reporte.pdf\n");
-    }
+
 
     // ============================================================
     // ============== SECCIÓN: VALIDACIONES Y UTILIDADES ==========
@@ -161,7 +166,6 @@ public class Main {
             System.err.println("   • La ruta del archivo sea correcta");
             System.err.println("   • El archivo tenga extensión .xlsx");
             System.err.println("   • Tenga permisos de lectura\n");
-            printUsageExamples();
             System.exit(1);
         }
 
@@ -171,7 +175,7 @@ public class Main {
             System.exit(1);
         }
 
-        if (!excelPath.toLowerCase().endsWith(".xlsx")) {
+        if (!excelPath.toLowerCase().endsWith(XLSX_EXTENSION)) {
             System.err.println(" Error: El archivo debe tener extensión .xlsx: " + excelPath);
             System.err.println("  Nota: No se soportan archivos .xls (formato antiguo)");
             System.exit(1);
@@ -207,8 +211,8 @@ public class Main {
         String directory = excelFile.getParent();
         
         // Generar timestamp HHMMSS
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"));
-        String pdfFileName = "composicion_accionaria_" + timestamp + ".pdf";
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern(TIME_PATTERN));
+        String pdfFileName = PDF_PREFIX + timestamp + ".pdf";
         
         return (directory != null)
                 ? new File(directory, pdfFileName).getAbsolutePath()
@@ -236,19 +240,19 @@ public class Main {
         System.out.println("   Ubicación: " + result.getOutputPdfPath());
         System.out.println("   Tamaño: " + formatFileSize(result.getPdfSize()));
 
-        System.out.println("\n TOP 5 BENEFICIARIOS:");
+        System.out.println("\n TOP " + TOP_BENEFICIARIES_LIMIT + " BENEFICIARIOS:");
         if (result.getFinalResults().isEmpty()) {
             System.out.println("   No se encontraron beneficiarios finales");
         } else {
             result.getFinalResults().entrySet().stream()
                     .sorted(java.util.Map.Entry.<String, Double>comparingByValue().reversed())
-                    .limit(5)
+                    .limit(TOP_BENEFICIARIES_LIMIT)
                     .forEach(entry -> {
                         String beneficiary = entry.getKey();
                         double percentage = entry.getValue();
-                        String bar = generateProgressBar(percentage, 20);
+                        String bar = generateProgressBar(percentage, PROGRESS_BAR_WIDTH);
                         System.out.printf("   • %-30s %8.4f%% %s%n",
-                                truncateString(beneficiary, 30), percentage * 100, bar);
+                                truncateString(beneficiary, MAX_DISPLAY_LENGTH), percentage * 100, bar);
                     });
         }
 
@@ -300,9 +304,10 @@ public class Main {
             javax.swing.UIManager.setLookAndFeel(
                 javax.swing.UIManager.getSystemLookAndFeelClassName()
             );
-        } catch (Exception e) {
+        } catch (ClassNotFoundException | InstantiationException | 
+                 IllegalAccessException | javax.swing.UnsupportedLookAndFeelException e) {
             // Si falla, usar el Look and Feel por defecto
-            System.err.println("No se pudo configurar el Look and Feel del sistema");
+            System.err.println("No se pudo configurar el Look and Feel del sistema: " + e.getMessage());
         }
 
         // Lanzar GUI en el Event Dispatch Thread
@@ -331,7 +336,7 @@ public class Main {
             System.out.println("   🔧 Aplicando correcciones automáticas al Excel...");
             
             // Generar ruta del archivo corregido
-            String correctedPath = originalExcelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+            String correctedPath = originalExcelPath.replace(XLSX_EXTENSION, CLEANED_SUFFIX);
             
             // Ejecutar el script de corrección usando ProcessBuilder
             ProcessBuilder pb = new ProcessBuilder("python", "fix_dra_blue_dynamic.py", originalExcelPath);
@@ -365,7 +370,7 @@ public class Main {
                 return originalExcelPath;
             }
             
-        } catch (Exception e) {
+        } catch (java.io.IOException | InterruptedException e) {
             System.out.println("   ⚠ Error aplicando correcciones: " + e.getMessage());
             System.out.println("   📋 Usando archivo original sin correcciones");
             return originalExcelPath;
@@ -378,7 +383,7 @@ public class Main {
      */
     private static boolean needsCorrections(String excelPath) {
         // Verificar si ya existe una versión corregida
-        String correctedPath = excelPath.replace(".xlsx", "_cleaned_fixed.xlsx");
+        String correctedPath = excelPath.replace(XLSX_EXTENSION, CLEANED_SUFFIX);
         File correctedFile = new File(correctedPath);
         
         // Si ya existe el archivo corregido y es más reciente, no necesita correcciones
