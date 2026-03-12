@@ -2,6 +2,7 @@ package com.davivienda.excelpdf.ui;
 
 import com.davivienda.excelpdf.application.CsvToExcelConverter;
 import com.davivienda.excelpdf.application.ExcelOwnershipProcessor;
+import com.davivienda.excelpdf.application.OwnershipCalculator;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -19,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * Interfaz gráfica para el análisis de composición accionaria
@@ -186,13 +188,23 @@ public class ComposicionAccionariaGUI extends JFrame {
         gbc.weightx = 0;
         inputPanel.add(new JLabel("Entidad Raíz:"), gbc);
 
+        // Entidad Raíz - Ahora editable con detección automática
         gbc.gridx = 1;
-        gbc.gridwidth = 2;
-        gbc.weightx = 1.0;
-        txtEntidadRaiz = new JTextField("RED COW INC");
-        txtEntidadRaiz.setEditable(false);
-        txtEntidadRaiz.setToolTipText("Entidad raíz fija para el análisis");
+        gbc.gridwidth = 1;
+        gbc.weightx = 0.7;
+        txtEntidadRaiz = new JTextField();
+        txtEntidadRaiz.setEditable(true);
+        txtEntidadRaiz.setToolTipText("Ingrese o seleccione la entidad raíz para el análisis");
         inputPanel.add(txtEntidadRaiz, gbc);
+
+        // Botón para detectar automáticamente
+        gbc.gridx = 2;
+        gbc.gridwidth = 1;
+        gbc.weightx = 0.3;
+        JButton btnDetectar = new JButton("Detectar Auto");
+        btnDetectar.setToolTipText("Detectar automáticamente entidades raíz del archivo");
+        btnDetectar.addActionListener(e -> detectarEntidadesRaiz());
+        inputPanel.add(btnDetectar, gbc);
 
         panel.add(inputPanel, BorderLayout.NORTH);
 
@@ -296,6 +308,128 @@ public class ComposicionAccionariaGUI extends JFrame {
                 lblEstado.setText("Archivo seleccionado: " + archivoSeleccionado.getName());
                 appendLog("Archivo seleccionado: " + archivoSeleccionado.getAbsolutePath());
             }
+            
+            // Detectar automáticamente la entidad raíz al seleccionar el archivo
+            SwingUtilities.invokeLater(() -> detectarEntidadesRaiz());
+        }
+    }
+
+    /**
+     * Detecta automáticamente entidades raíz del archivo Excel seleccionado
+     */
+    private void detectarEntidadesRaiz() {
+        String archivoExcel = txtArchivo.getText().trim();
+        
+        if (archivoExcel.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                this,
+                "Por favor seleccione un archivo Excel primero",
+                "Archivo no seleccionado",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        
+        File file = new File(archivoExcel);
+        if (!file.exists()) {
+            JOptionPane.showMessageDialog(
+                this,
+                "El archivo seleccionado no existe",
+                "Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+        
+        try {
+            appendLog("\n🔍 Analizando archivo para detectar entidades raíz...");
+            lblEstado.setText("Detectando entidades raíz...");
+            
+            // Crear calculadora temporal para cargar y analizar el archivo
+            OwnershipCalculator tempCalculator = new OwnershipCalculator();
+            tempCalculator.loadFromExcel(archivoExcel);
+            
+            // Detectar entidades raíz
+            List<String> rootEntities = tempCalculator.detectRootEntities();
+            List<String> allEntities = tempCalculator.getAllEntityNames();
+            
+            appendLog("✅ Análisis completado");
+            appendLog("   Total de entidades: " + allEntities.size());
+            appendLog("   Entidades raíz detectadas: " + rootEntities.size());
+            
+            if (rootEntities.isEmpty()) {
+                appendLog("⚠️  No se detectaron entidades raíz automáticamente");
+                appendLog("   Esto puede indicar una estructura circular");
+                
+                // Mostrar todas las entidades disponibles
+                String[] options = allEntities.toArray(new String[0]);
+                String selected = (String) JOptionPane.showInputDialog(
+                    this,
+                    "No se detectaron entidades raíz automáticamente.\n" +
+                    "Esto puede indicar que hay ciclos en la estructura.\n\n" +
+                    "Seleccione manualmente una entidad:",
+                    "Selección Manual de Entidad Raíz",
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    options,
+                    options.length > 0 ? options[0] : null
+                );
+                
+                if (selected != null && !selected.trim().isEmpty()) {
+                    txtEntidadRaiz.setText(selected.trim());
+                    appendLog("✓ Entidad seleccionada manualmente: " + selected);
+                    lblEstado.setText("Entidad raíz: " + selected);
+                }
+                
+            } else if (rootEntities.size() == 1) {
+                // Solo una entidad raíz - autoseleccionar
+                String rootEntity = rootEntities.get(0);
+                txtEntidadRaiz.setText(rootEntity);
+                appendLog("✓ Entidad raíz autoseleccionada: " + rootEntity);
+                lblEstado.setText("Entidad raíz detectada: " + rootEntity);
+                
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Entidad raíz detectada automáticamente:\n\n" + rootEntity,
+                    "Detección Exitosa",
+                    JOptionPane.INFORMATION_MESSAGE
+                );
+                
+            } else {
+                // Múltiples entidades raíz - dejar que el usuario seleccione
+                appendLog("   Entidades raíz encontradas:");
+                for (String root : rootEntities) {
+                    appendLog("   - " + root);
+                }
+                
+                String[] options = rootEntities.toArray(new String[0]);
+                String selected = (String) JOptionPane.showInputDialog(
+                    this,
+                    "Se detectaron múltiples entidades raíz.\n" +
+                    "Seleccione la entidad principal para el análisis:",
+                    "Seleccionar Entidad Raíz",
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    options,
+                    options[0]
+                );
+                
+                if (selected != null && !selected.trim().isEmpty()) {
+                    txtEntidadRaiz.setText(selected.trim());
+                    appendLog("✓ Entidad raíz seleccionada: " + selected);
+                    lblEstado.setText("Entidad raíz: " + selected);
+                }
+            }
+            
+        } catch (Exception ex) {
+            appendLog("❌ Error al analizar el archivo: " + ex.getMessage());
+            lblEstado.setText("Error en detección");
+            JOptionPane.showMessageDialog(
+                this,
+                "Error al analizar el archivo:\n" + ex.getMessage(),
+                "Error de Análisis",
+                JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -349,48 +483,47 @@ public class ComposicionAccionariaGUI extends JFrame {
                     progressBar.setValue(40);
                 }
 
-                // Lógica especial para data.xlsx: siempre generar versión corregida
+                // Detección automática de formato y conversión si es necesario
                 String archivoOriginal = archivoExcel;
                 String archivoParaProcesar = archivoExcel;
                 
-                if (new File(archivoExcel).getName().equals("data.xlsx")) {
-                    publish("\n Detectado archivo data.xlsx - Generando versión corregida...");
-                    publish("Archivo original: " + archivoOriginal);
-                    progressBar.setValue(45);
+                publish("\nDetectando formato del archivo Excel...");
+                progressBar.setValue(40);
+                
+                try {
+                    String formatoDetectado = detectarFormatoExcel(archivoExcel);
+                    publish(" Formato detectado: " + formatoDetectado.toUpperCase());
                     
-                    try {
-                        String archivoCorregido = generarArchivoCorregido(archivoExcel);
-                        publish(" Archivo corregido generado exitosamente");
-                        publish("Archivo corregido: " + archivoCorregido);
-                        archivoParaProcesar = archivoCorregido;
-                    } catch (Exception e) {
-                        publish(" ERROR CRÍTICO: No se pudo generar el archivo corregido");
-                        publish(" Motivo: " + e.getMessage());
-                        publish(" ADVERTENCIA: PDF NO GENERADO debido a error en corrección del archivo");
-                        throw new Exception("No se pudo generar el archivo corregido para data.xlsx: " + e.getMessage());
-                    }
-                } else {
-                    // Para otros archivos, aplicar correcciones solo si es necesario
-                    publish("\nVerificando si el Excel necesita correcciones...");
-                    publish("Archivo a procesar: " + archivoExcel);
-                    progressBar.setValue(45);
-                    
-                    try {
+                    if ("hierarchical".equals(formatoDetectado)) {
+                        publish("\n El archivo tiene formato jerárquico - Convirtiendo a formato relacional...");
+                        publish("Archivo original: " + archivoOriginal);
+                        progressBar.setValue(45);
+                        
+                        String archivoConvertido = convertirFormatoJerarquico(archivoExcel);
+                        publish(" Conversión completada exitosamente");
+                        publish("Archivo convertido: " + archivoConvertido);
+                        archivoParaProcesar = archivoConvertido;
+                        
+                    } else if ("relational".equals(formatoDetectado)) {
+                        publish(" El archivo ya tiene formato relacional - No requiere conversión");
+                        
+                        // Aplicar correcciones menores si es necesario
                         String archivoCorregido = aplicarCorreccionesAutomaticas(archivoExcel);
                         if (!archivoCorregido.equals(archivoExcel)) {
                             publish(" Correcciones automáticas aplicadas");
-                            publish("Archivo original: " + archivoOriginal);
-                            publish("Archivo corregido: " + archivoCorregido);
                             archivoParaProcesar = archivoCorregido;
-                        } else {
-                            publish(" No se requieren correcciones para este archivo");
                         }
-                    } catch (Exception e) {
-                        publish(" ERROR CRÍTICO: No se pudieron aplicar las correcciones necesarias");
-                        publish(" Motivo: " + e.getMessage());
-                        publish(" ADVERTENCIA: PDF NO GENERADO debido a error en corrección del archivo");
-                        throw new Exception("No se pudieron aplicar las correcciones al archivo: " + e.getMessage());
+                        
+                    } else {
+                        publish(" ADVERTENCIA: No se pudo determinar el formato - Intentando procesamiento directo");
                     }
+                    
+                    progressBar.setValue(50);
+                    
+                } catch (Exception e) {
+                    publish(" ERROR: No se pudo procesar el archivo: " + e.getMessage());
+                    publish(" Intentando procesamiento directo...");
+                    // Continuar con el archivo original
                 }
                 
                 // Procesar análisis
@@ -411,8 +544,13 @@ public class ComposicionAccionariaGUI extends JFrame {
                 
                 progressBar.setValue(60);
 
+                // IMPORTANTE: Usar el archivo procesado (convertido) para AMBOS:
+                // - Cálculo de beneficiarios
+                // - Tabla de desglose en el PDF
+                // Esto asegura que si se convirtió de jerárquico a relacional, 
+                // el PDF muestre los datos correctos
                 ExcelOwnershipProcessor.ProcessingResult result = 
-                    processor.processOwnershipAnalysis(archivoParaProcesar, entidadRaiz, outputPdf, archivoOriginal);
+                    processor.processOwnershipAnalysis(archivoParaProcesar, entidadRaiz, outputPdf, archivoParaProcesar);
 
                 progressBar.setValue(90);
 
@@ -515,7 +653,7 @@ public class ComposicionAccionariaGUI extends JFrame {
      */
     private void limpiarFormulario() {
         txtArchivo.setText("");
-        txtEntidadRaiz.setText("RED COW INC");
+        txtEntidadRaiz.setText("");  // Campo vacío, se llenará con autodetección
         txtLog.setText("");
         archivoSeleccionado = null;
         ultimoPdfGenerado = null;
@@ -540,7 +678,7 @@ public class ComposicionAccionariaGUI extends JFrame {
         btnSeleccionar.setEnabled(enabled);
         btnProcesar.setEnabled(enabled);
         btnLimpiar.setEnabled(enabled);
-        // txtEntidadRaiz permanece siempre deshabilitado
+        // txtEntidadRaiz permanece editable ahora - se puede detectar automáticamente o ingresar manualmente
     }
 
     /**
@@ -678,6 +816,90 @@ public class ComposicionAccionariaGUI extends JFrame {
         
         detailedError.append("\nSalida completa:\n").append(fullOutput);
         return "Error en generación de archivo corregido: " + detailedError.toString();
+    }
+
+    /**
+     * Detecta automáticamente el formato del archivo Excel
+     * @return "hierarchical", "relational", o "unknown"
+     */
+    private String detectarFormatoExcel(String excelPath) throws Exception {
+        String pythonCommand = validarEntornoPython();
+        
+        try {
+            appendLog("  Ejecutando detector de formato...");
+            
+            ProcessBuilder pb = new ProcessBuilder(pythonCommand, "detect_excel_format.py", excelPath);
+            pb.directory(new File(System.getProperty("user.dir")));
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            StringBuilder outputBuffer = new StringBuilder();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
+            String line;
+            
+            while ((line = reader.readLine()) != null) {
+                outputBuffer.append(line).append("\n");
+                if (line.contains("Formato detectado:")) {
+                    appendLog("  " + line);
+                }
+            }
+            
+            int exitCode = process.waitFor();
+            
+            if (exitCode == 0) {
+                String output = outputBuffer.toString();
+                if (output.contains("HIERARCHICAL")) {
+                    return "hierarchical";
+                } else if (output.contains("RELATIONAL")) {
+                    return "relational";
+                } else {
+                    return "unknown";
+                }
+            } else {
+                appendLog("  ERROR: Detector de formato falló con código " + exitCode);
+                return "unknown";
+            }
+            
+        } catch (Exception e) {
+            appendLog("  ERROR ejecutando detector: " + e.getMessage());
+            return "unknown";
+        }
+    }
+
+    /**
+     * Convierte un archivo de formato jerárquico a formato relacional
+     */
+    private String convertirFormatoJerarquico(String excelPath) throws Exception {
+        String pythonCommand = validarEntornoPython();
+        
+        try {
+            appendLog("  Ejecutando parser genérico...");
+            
+            ProcessBuilder pb = new ProcessBuilder(pythonCommand, "parse_hierarchical_format.py", excelPath);
+            pb.directory(new File(System.getProperty("user.dir")));
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            StringBuilder outputBuffer = procesarSalidaPython(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode == 0) {
+                String convertedPath = excelPath.replace(".xlsx", "_converted.xlsx");
+                if (new File(convertedPath).exists()) {
+                    appendLog("  Conversión exitosa: " + new File(convertedPath).getName());
+                    return convertedPath;
+                } else {
+                    throw new Exception("El archivo convertido no se generó: " + convertedPath);
+                }
+            } else {
+                throw new Exception("Parser falló con código " + exitCode + "\n" + outputBuffer.toString());
+            }
+            
+        } catch (Exception e) {
+            String errorMsg = "Error convirtiendo formato jerárquico: " + e.getMessage();
+            appendLog("  ERROR: " + errorMsg);
+            throw new Exception(errorMsg);
+        }
     }
 
     /**

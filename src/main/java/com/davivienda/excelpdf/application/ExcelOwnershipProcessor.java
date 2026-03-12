@@ -366,11 +366,11 @@ public class ExcelOwnershipProcessor {
         java.util.List<String[]> tableData = new java.util.ArrayList<>();
         
         try {
-            logger.info("Cargando filas desde archivo Excel original para tabla PDF (desde fila 4): {}", excelPath);
+            logger.info("Cargando filas desde archivo Excel para tabla PDF: {}", excelPath);
             
             File excelFile = new File(excelPath);
             if (!excelFile.exists()) {
-                logger.warn("Archivo Excel original no encontrado: {}", excelPath);
+                logger.warn("Archivo Excel no encontrado: {}", excelPath);
                 return tableData;
             }
             
@@ -379,14 +379,37 @@ public class ExcelOwnershipProcessor {
                 
                 Sheet sheet = workbook.getSheetAt(0);
                 
-                // Leer dinámicamente desde la fila 4 hasta la última fila con datos
-                for (int rowIndex = 3; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                // Detectar si es archivo convertido (encabezados en fila 1) o formato original (datos desde fila 4)
+                int startRowIndex = 3; // Por defecto, formato original (fila 4)
+                boolean isConvertedFormat = false;
+                
+                Row headerRow = sheet.getRow(0); // Fila 1 (índice 0)
+                if (headerRow != null) {
+                    String col1 = getCellValueAsString(headerRow.getCell(0));
+                    String col2 = getCellValueAsString(headerRow.getCell(1));
+                    String col3 = getCellValueAsString(headerRow.getCell(2));
+                    
+                    // Si la primera fila contiene los encabezados del formato convertido
+                    if (col1 != null && col1.trim().equalsIgnoreCase("Entidad") &&
+                        col2 != null && col2.trim().equalsIgnoreCase("Accionista") &&
+                        col3 != null && (col3.trim().equalsIgnoreCase("% Participación") || 
+                                        col3.trim().equalsIgnoreCase("% Participacion"))) {
+                        startRowIndex = 1; // Empezar desde fila 2 (índice 1)
+                        isConvertedFormat = true;
+                        logger.info("Formato detectado: CONVERTIDO (encabezados en fila 1)");
+                    } else {
+                        logger.info("Formato detectado: ORIGINAL (datos desde fila 4)");
+                    }
+                }
+                
+                // Leer dinámicamente desde la fila correspondiente hasta la última fila con datos
+                for (int rowIndex = startRowIndex; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                     Row row = sheet.getRow(rowIndex);
                     if (row == null) continue;
                     
                     Cell columnA = row.getCell(0); // Entidad/Nombre
-                    Cell columnB = row.getCell(1); // Porcentaje directo
-                    Cell columnC = row.getCell(2); // Porcentaje final
+                    Cell columnB = row.getCell(1); // Accionista o Porcentaje directo
+                    Cell columnC = row.getCell(2); // Porcentaje participación o final
                     
                     String entityName = getCellValueAsString(columnA);
                     String directPercentage = getCellValueAsString(columnB);
@@ -400,21 +423,28 @@ public class ExcelOwnershipProcessor {
                         // Limpiar valores nulos o vacíos
                         entityName = (entityName != null) ? entityName.trim() : "";
                         
-                        // Convertir valores decimales a porcentajes (multiplicar por 100)
-                        directPercentage = convertToPercentage(directPercentage);
-                        finalPercentage = convertToPercentage(finalPercentage);
+                        // Si es formato convertido, columna C ya viene como porcentaje entero
+                        // Si es formato original, convertir decimales a porcentajes
+                        if (!isConvertedFormat) {
+                            directPercentage = convertToPercentage(directPercentage);
+                            finalPercentage = convertToPercentage(finalPercentage);
+                        } else {
+                            // En formato convertido, solo necesitamos formatear si es necesario
+                            directPercentage = (directPercentage != null) ? directPercentage.trim() : "";
+                            finalPercentage = (finalPercentage != null) ? finalPercentage.trim() : "";
+                        }
                         
                         // Agregar la fila como array de strings
                         tableData.add(new String[]{entityName, directPercentage, finalPercentage});
                     }
                 }
                 
-                logger.info("Filas del archivo Excel original cargadas para tabla PDF: {}", tableData.size());
+                logger.info("Filas del archivo Excel cargadas para tabla PDF: {}", tableData.size());
                 
             }
             
         } catch (Exception e) {
-            logger.error("Error cargando filas del archivo Excel original: {}", e.getMessage(), e);
+            logger.error("Error cargando filas del archivo Excel: {}", e.getMessage(), e);
         }
         
         return tableData;
