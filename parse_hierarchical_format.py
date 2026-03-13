@@ -283,7 +283,10 @@ def main():
         # Parsear archivo
         parser = HierarchicalParser(excel_file)
         parser.parse()
-        
+
+        # Emitir entidad raíz con marcador reconocible para el proceso invocador
+        print(f"ROOT_ENTITY:{parser.root_entity}")
+
         # Generar archivo de salida
         input_path = Path(excel_file)
         output_file = input_path.parent / f"{input_path.stem}_converted.xlsx"

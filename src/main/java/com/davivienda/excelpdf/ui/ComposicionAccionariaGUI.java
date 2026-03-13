@@ -315,122 +315,88 @@ public class ComposicionAccionariaGUI extends JFrame {
     }
 
     /**
-     * Detecta automáticamente entidades raíz del archivo Excel seleccionado
+     * Detecta automáticamente la entidad raíz del archivo Excel seleccionado.
+     * No muestra ningún diálogo modal: auto-rellena txtEntidadRaiz de forma silenciosa.
+     * - Formato jerárquico: ejecuta parse_hierarchical_format.py y captura ROOT_ENTITY:
+     * - Formato relacional:  usa OwnershipCalculator.detectRootEntities()
      */
     private void detectarEntidadesRaiz() {
         String archivoExcel = txtArchivo.getText().trim();
-        
-        if (archivoExcel.isEmpty()) {
-            JOptionPane.showMessageDialog(
-                this,
-                "Por favor seleccione un archivo Excel primero",
-                "Archivo no seleccionado",
-                JOptionPane.WARNING_MESSAGE
-            );
+
+        if (archivoExcel.isEmpty() || !new File(archivoExcel).exists()) {
+            appendLog("⚠️  No hay archivo válido para detectar entidad raíz");
             return;
         }
-        
-        File file = new File(archivoExcel);
-        if (!file.exists()) {
-            JOptionPane.showMessageDialog(
-                this,
-                "El archivo seleccionado no existe",
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-            );
-            return;
-        }
-        
+
         try {
-            appendLog("\n🔍 Analizando archivo para detectar entidades raíz...");
-            lblEstado.setText("Detectando entidades raíz...");
-            
-            // Crear calculadora temporal para cargar y analizar el archivo
-            OwnershipCalculator tempCalculator = new OwnershipCalculator();
-            tempCalculator.loadFromExcel(archivoExcel);
-            
-            // Detectar entidades raíz
-            List<String> rootEntities = tempCalculator.detectRootEntities();
-            List<String> allEntities = tempCalculator.getAllEntityNames();
-            
-            appendLog("✅ Análisis completado");
-            appendLog("   Total de entidades: " + allEntities.size());
-            appendLog("   Entidades raíz detectadas: " + rootEntities.size());
-            
-            if (rootEntities.isEmpty()) {
-                appendLog("⚠️  No se detectaron entidades raíz automáticamente");
-                appendLog("   Esto puede indicar una estructura circular");
-                
-                // Mostrar todas las entidades disponibles
-                String[] options = allEntities.toArray(new String[0]);
-                String selected = (String) JOptionPane.showInputDialog(
-                    this,
-                    "No se detectaron entidades raíz automáticamente.\n" +
-                    "Esto puede indicar que hay ciclos en la estructura.\n\n" +
-                    "Seleccione manualmente una entidad:",
-                    "Selección Manual de Entidad Raíz",
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    options,
-                    options.length > 0 ? options[0] : null
-                );
-                
-                if (selected != null && !selected.trim().isEmpty()) {
-                    txtEntidadRaiz.setText(selected.trim());
-                    appendLog("✓ Entidad seleccionada manualmente: " + selected);
-                    lblEstado.setText("Entidad raíz: " + selected);
-                }
-                
-            } else if (rootEntities.size() == 1) {
-                // Solo una entidad raíz - autoseleccionar
-                String rootEntity = rootEntities.get(0);
-                txtEntidadRaiz.setText(rootEntity);
-                appendLog("✓ Entidad raíz autoseleccionada: " + rootEntity);
-                lblEstado.setText("Entidad raíz detectada: " + rootEntity);
-                
-                JOptionPane.showMessageDialog(
-                    this,
-                    "Entidad raíz detectada automáticamente:\n\n" + rootEntity,
-                    "Detección Exitosa",
-                    JOptionPane.INFORMATION_MESSAGE
-                );
-                
+            appendLog("\n🔍 Detectando entidad raíz automáticamente...");
+            lblEstado.setText("Detectando entidad raíz...");
+
+            String formato = detectarFormatoExcel(archivoExcel);
+            String rootEntity = null;
+
+            if ("hierarchical".equals(formato)) {
+                // Para formato jerárquico: ejecutar el parser Python y leer ROOT_ENTITY:
+                rootEntity = detectarRaizDesdeJerarquico(archivoExcel);
             } else {
-                // Múltiples entidades raíz - dejar que el usuario seleccione
-                appendLog("   Entidades raíz encontradas:");
-                for (String root : rootEntities) {
-                    appendLog("   - " + root);
-                }
-                
-                String[] options = rootEntities.toArray(new String[0]);
-                String selected = (String) JOptionPane.showInputDialog(
-                    this,
-                    "Se detectaron múltiples entidades raíz.\n" +
-                    "Seleccione la entidad principal para el análisis:",
-                    "Seleccionar Entidad Raíz",
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    options,
-                    options[0]
-                );
-                
-                if (selected != null && !selected.trim().isEmpty()) {
-                    txtEntidadRaiz.setText(selected.trim());
-                    appendLog("✓ Entidad raíz seleccionada: " + selected);
-                    lblEstado.setText("Entidad raíz: " + selected);
+                // Para formato relacional (o desconocido): usar OwnershipCalculator
+                OwnershipCalculator tempCalculator = new OwnershipCalculator();
+                tempCalculator.loadFromExcel(archivoExcel);
+                List<String> roots = tempCalculator.detectRootEntities();
+                if (!roots.isEmpty()) {
+                    rootEntity = roots.get(0);
+                    if (roots.size() > 1) {
+                        appendLog("   Múltiples raíces candidatas: " + roots);
+                        appendLog("   Usando la primera en orden alfabético: " + rootEntity);
+                    }
+                } else {
+                    // Sin raíz clara: usar la primera entidad disponible
+                    List<String> all = tempCalculator.getAllEntityNames();
+                    if (!all.isEmpty()) {
+                        rootEntity = all.get(0);
+                        appendLog("⚠️  Sin raíz clara, usando primera entidad: " + rootEntity);
+                    }
                 }
             }
-            
+
+            if (rootEntity != null && !rootEntity.trim().isEmpty()) {
+                txtEntidadRaiz.setText(rootEntity.trim());
+                appendLog("✅ Entidad raíz detectada: " + rootEntity);
+                lblEstado.setText("Entidad raíz: " + rootEntity);
+            } else {
+                appendLog("⚠️  No se pudo detectar entidad raíz automáticamente");
+                lblEstado.setText("Entidad raíz no detectada");
+            }
+
         } catch (Exception ex) {
-            appendLog("❌ Error al analizar el archivo: " + ex.getMessage());
+            appendLog("❌ Error al detectar entidad raíz: " + ex.getMessage());
             lblEstado.setText("Error en detección");
-            JOptionPane.showMessageDialog(
-                this,
-                "Error al analizar el archivo:\n" + ex.getMessage(),
-                "Error de Análisis",
-                JOptionPane.ERROR_MESSAGE
-            );
         }
+    }
+
+    /**
+     * Ejecuta parse_hierarchical_format.py y extrae la entidad raíz de la línea ROOT_ENTITY:
+     * que el script emite justo después de detectarla, antes de convertir el archivo.
+     */
+    private String detectarRaizDesdeJerarquico(String excelPath) throws Exception {
+        String pythonCommand = validarEntornoPython();
+
+        ProcessBuilder pb = new ProcessBuilder(pythonCommand, "parse_hierarchical_format.py", excelPath);
+        pb.directory(new File(System.getProperty("user.dir")));
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
+        String line;
+        String rootEntity = null;
+
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith("ROOT_ENTITY:")) {
+                rootEntity = line.substring("ROOT_ENTITY:".length()).trim();
+            }
+        }
+        process.waitFor();
+        return rootEntity;
     }
 
     /**

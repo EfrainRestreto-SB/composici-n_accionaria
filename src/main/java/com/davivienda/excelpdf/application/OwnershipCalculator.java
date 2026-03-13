@@ -2,10 +2,14 @@ package com.davivienda.excelpdf.application;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -211,6 +215,112 @@ public class OwnershipCalculator {
     }
     
     /**
+     * Detecta automáticamente posibles entidades raíz en el grafo.
+     * Una entidad raíz es aquella que aparece como entidad (columna A) 
+     * pero NO como accionista (columna B).
+     * 
+     * @return Lista de nombres de entidades raíz candidatas
+     */
+    public List<String> detectRootEntities() {
+        logger.info("Detectando entidades raíz automáticamente...");
+        
+        Set<String> entities = new HashSet<>();      // Todas las entidades (columna A)
+        Set<String> shareholders = new HashSet<>();  // Todos los accionistas (columna B)
+        
+        // Recopilar todas las entidades y accionistas
+        for (Map.Entry<String, Node> entry : graph.entrySet()) {
+            String entityName = entry.getKey();
+            Node node = entry.getValue();
+            
+            entities.add(entityName);
+            
+            // Agregar todos los propietarios de este nodo como accionistas
+            for (Node owner : node.getOwners().keySet()) {
+                shareholders.add(owner.getName());
+            }
+        }
+        
+        // Las entidades raíz son las que están en entities pero NO en shareholders
+        Set<String> rootCandidates = new HashSet<>(entities);
+        rootCandidates.removeAll(shareholders);
+        
+        List<String> sortedRoots = new ArrayList<>(rootCandidates);
+        Collections.sort(sortedRoots);
+        
+        logger.info("Entidades raíz detectadas: {}", sortedRoots);
+        return sortedRoots;
+    }
+    
+    /**
+     * Obtiene todas las entidades disponibles en el grafo.
+     * 
+     * @return Lista ordenada de nombres de todas las entidades
+     */
+    public List<String> getAllEntityNames() {
+        List<String> allEntities = new ArrayList<>(graph.keySet());
+        Collections.sort(allEntities);
+        return allEntities;
+    }
+    
+    /**
+     * Verifica si una entidad existe en el grafo.
+     * 
+     * @param entityName nombre de la entidad a verificar
+     * @return true si la entidad existe, false en caso contrario
+     */
+    public boolean entityExists(String entityName) {
+        return graph.containsKey(entityName.trim());
+    }
+    
+    /**
+     * Encuentra entidades similares a un nombre dado (para sugerencias).
+     * Usa distancia de Levenshtein simple.
+     * 
+     * @param targetName nombre buscado
+     * @param maxSuggestions número máximo de sugerencias
+     * @return Lista de entidades similares
+     */
+    public List<String> findSimilarEntities(String targetName, int maxSuggestions) {
+        if (targetName == null || targetName.trim().isEmpty()) {
+            return getAllEntityNames().stream().limit(maxSuggestions).collect(Collectors.toList());
+        }
+        
+        String target = targetName.trim().toLowerCase();
+        
+        return graph.keySet().stream()
+            .sorted((a, b) -> {
+                int distA = levenshteinDistance(target, a.toLowerCase());
+                int distB = levenshteinDistance(target, b.toLowerCase());
+                return Integer.compare(distA, distB);
+            })
+            .limit(maxSuggestions)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Calcula la distancia de Levenshtein entre dos strings.
+     */
+    private int levenshteinDistance(String s1, String s2) {
+        int[][] dp = new int[s1.length() + 1][s2.length() + 1];
+        
+        for (int i = 0; i <= s1.length(); i++) dp[i][0] = i;
+        for (int j = 0; j <= s2.length(); j++) dp[0][j] = j;
+        
+        for (int i = 1; i <= s1.length(); i++) {
+            for (int j = 1; j <= s2.length(); j++) {
+                int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
+                dp[i][j] = Math.min(Math.min(
+                    dp[i - 1][j] + 1,      // deletion
+                    dp[i][j - 1] + 1),     // insertion
+                    dp[i - 1][j - 1] + cost // substitution
+                );
+            }
+        }
+        
+        return dp[s1.length()][s2.length()];
+    }
+    
+    /**
      * Calcula las participaciones finales desde una entidad raíz.
      * 
      * @param rootEntityName nombre de la entidad raíz
@@ -221,7 +331,30 @@ public class OwnershipCalculator {
         
         Node rootNode = graph.get(rootEntityName.trim());
         if (rootNode == null) {
-            throw new IllegalArgumentException("Entidad raíz no encontrada: " + rootEntityName);
+            // Generar mensaje de error con sugerencias
+            List<String> suggestions = findSimilarEntities(rootEntityName, 5);
+            List<String> detectedRoots = detectRootEntities();
+            
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("Entidad raíz no encontrada: '").append(rootEntityName).append("'\n\n");
+            
+            if (!detectedRoots.isEmpty()) {
+                errorMsg.append("Entidades raíz detectadas automáticamente:\n");
+                for (String root : detectedRoots) {
+                    errorMsg.append("  - ").append(root).append("\n");
+                }
+            }
+            
+            if (!suggestions.isEmpty()) {
+                errorMsg.append("\nEntidades disponibles similares:\n");
+                for (String suggestion : suggestions) {
+                    errorMsg.append("  - ").append(suggestion).append("\n");
+                }
+            }
+            
+            errorMsg.append("\nTotal de entidades en el archivo: ").append(graph.size());
+            
+            throw new IllegalArgumentException(errorMsg.toString());
         }
         
         // Limpiar resultados anteriores
