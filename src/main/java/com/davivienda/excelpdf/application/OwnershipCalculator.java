@@ -30,6 +30,12 @@ import com.davivienda.excelpdf.domain.Node;
  * @version 1.0
  */
 public class OwnershipCalculator {
+        /**
+         * Devuelve el mapa de tipos por nombre (entidad o accionista).
+         */
+        public Map<String, String> getTiposPorNombre() {
+            return tiposPorNombre;
+        }
     
     private static final Logger logger = LoggerFactory.getLogger(OwnershipCalculator.class);
     
@@ -45,8 +51,12 @@ public class OwnershipCalculator {
      * @param name nombre de la entidad
      * @return nodo existente o nuevo nodo
      */
+    // Nuevo: almacenar tipo por nombre
+    private final Map<String, String> tiposPorNombre = new HashMap<>();
+
     private Node getOrCreateNode(String name) {
-        return graph.computeIfAbsent(name.trim(), Node::new);
+        String tipo = tiposPorNombre.getOrDefault(name.trim(), "");
+        return graph.computeIfAbsent(name.trim(), n -> new Node(n, tipo));
     }
     
     /**
@@ -72,27 +82,60 @@ public class OwnershipCalculator {
                 throw new IllegalArgumentException("El archivo Excel debe tener al menos una fila de datos además del encabezado");
             }
             
+            // Detectar índices de columnas de tipo para entidad y accionista
+            Row headerRow = sheet.getRow(0);
+            int tipoEntidadColIdx = -1;
+            int tipoAccionistaColIdx = -1;
+            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                String header = getCellStringValue(headerRow.getCell(i)).toLowerCase();
+                if (header.equals("tipo entidad")) {
+                    tipoEntidadColIdx = i;
+                } else if (header.equals("tipo accionista")) {
+                    tipoAccionistaColIdx = i;
+                } else if (header.equals("tipo") && tipoEntidadColIdx == -1) {
+                    // Solo usar "Tipo" si no se encontró "Tipo Entidad"
+                    tipoEntidadColIdx = i;
+                }
+            }
+
             // Procesar filas (asumiendo que la primera fila son encabezados)
             for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 rowCount++;
-                
+
                 if (row == null) {
                     logger.warn("Fila {} está vacía, saltando...", rowIndex + 1);
                     continue;
                 }
-                
+
                 try {
                     // Extraer datos de las celdas
                     String entity = getCellStringValue(row.getCell(0));
                     String owner = getCellStringValue(row.getCell(1));
-                    
+                    String tipoEntidad = "";
+                    String tipoAccionista = "";
+                    if (tipoEntidadColIdx >= 0) {
+                        tipoEntidad = getCellStringValue(row.getCell(tipoEntidadColIdx));
+                    }
+                    if (tipoAccionistaColIdx >= 0) {
+                        tipoAccionista = getCellStringValue(row.getCell(tipoAccionistaColIdx));
+                    }
+
+                    // Guardar tipo para la entidad si está presente
+                    if (!entity.isEmpty() && !tipoEntidad.isEmpty()) {
+                        tiposPorNombre.put(entity, tipoEntidad);
+                    }
+                    // Guardar tipo para el accionista si está presente
+                    if (!owner.isEmpty() && !tipoAccionista.isEmpty()) {
+                        tiposPorNombre.put(owner, tipoAccionista);
+                    }
+
                     // Validar que entidad y accionista no estén vacíos antes de leer porcentaje
                     if (entity.isEmpty() || owner.isEmpty()) {
                         logger.warn("Fila {}: Entidad o Accionista vacío, saltando...", rowIndex + 1);
                         continue;
                     }
-                    
+
                     double percentage;
                     try {
                         percentage = getCellNumericValue(row.getCell(2));
@@ -100,28 +143,32 @@ public class OwnershipCalculator {
                         logger.warn("Fila {}: {}, saltando...", rowIndex + 1, e.getMessage());
                         continue;
                     }
-                    
+
                     // Validar datos
                     if (percentage <= 0 || percentage > 100) {
                         logger.warn("Fila {}: Porcentaje inválido ({}%), debe estar entre 0 y 100, saltando...", rowIndex + 1, percentage);
                         continue;
                     }
-                    
+
                     // Convertir porcentaje de 0-100 a 0-1
                     double normalizedPercentage = percentage / 100.0;
-                    
+
                     // Crear nodos y relación
                     Node entityNode = getOrCreateNode(entity);
                     Node ownerNode = getOrCreateNode(owner);
+                    // Asegurar que el tipo se asigne al nodo owner aunque solo sea accionista
+                    if (!tipoAccionista.isEmpty()) {
+                        ownerNode.setTipoIfEmpty(tipoAccionista);
+                    }
                     entityNode.addOwner(ownerNode, normalizedPercentage);
-                    
+
                     // Almacenar datos originales para el desglose detallado
                     originalData.computeIfAbsent(entity, k -> new HashMap<>())
                                .put(owner, normalizedPercentage);
-                    
+
                     validRowCount++;
                     logger.debug("Procesada relación: {} -> {} ({}%)", entity, owner, percentage);
-                    
+
                 } catch (Exception e) {
                     logger.error("Error procesando fila {}: {}", rowIndex + 1, e.getMessage());
                     throw new IllegalArgumentException("Error en fila " + (rowIndex + 1) + ": " + e.getMessage());
@@ -137,6 +184,12 @@ public class OwnershipCalculator {
             
             // Validar integridad del grafo
             validateGraphIntegrity();
+
+            // LOG: Imprimir todos los nombres y tipos detectados
+            logger.info("=== TIPOS POR NOMBRE DETECTADOS DESPUÉS DE CARGA DE EXCEL ===");
+            for (Map.Entry<String, String> entry : tiposPorNombre.entrySet()) {
+                logger.info("Nombre: '{}'  Tipo: '{}'", entry.getKey(), entry.getValue());
+            }
         }
     }
     
@@ -366,6 +419,16 @@ public class OwnershipCalculator {
         calculateOwnershipRecursive(rootNode, 1.0, rootEntityName, new HashSet<>());
         
         logger.info("Cálculo completado. Beneficiarios finales encontrados: {}", finalResults.size());
+
+        // --- NUEVO: Asegurar que todos los nodos tipo 'PN' sin propietarios sean beneficiarios finales ---
+        for (Node node : graph.values()) {
+            String nodeName = node.getName();
+            if (!node.hasOwners() && "PN".equalsIgnoreCase(node.getTipo()) && !finalResults.containsKey(nodeName)) {
+                finalResults.put(nodeName, 0.0); // Si no se recorrió, participación 0%
+                beneficiaryPaths.put(nodeName, "[NO ENCONTRADO EN RUTA DESDE RAÍZ]");
+                logger.warn("Beneficiario final PN sin ruta desde raíz: {}", nodeName);
+            }
+        }
     }
     
     /**
@@ -390,11 +453,16 @@ public class OwnershipCalculator {
             return;
         }
         
-        // Si no tiene propietarios, es un beneficiario final
-        if (!node.hasOwners()) {
+        // Si no tiene propietarios Y su tipo es "PN", es un beneficiario final
+        if (!node.hasOwners() && "PN".equalsIgnoreCase(node.getTipo())) {
             finalResults.merge(nodeName, accumulatedPercentage, Double::sum);
             beneficiaryPaths.put(nodeName, path);
             logger.debug("Beneficiario final: {} ({}%)", nodeName, accumulatedPercentage * 100);
+            return;
+        }
+        // Si no tiene propietarios pero NO es "PN", no se considera beneficiario final
+        if (!node.hasOwners()) {
+            logger.debug("Nodo sin propietarios pero tipo distinto de PN: {} (tipo={})", nodeName, node.getTipo());
             return;
         }
         

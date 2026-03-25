@@ -93,10 +93,19 @@ public class ExcelOwnershipProcessor {
             logger.info(" Paso 2: Calculando participaciones finales...");
             calculator.calculateFinalOwnership(rootEntity);
             
+
             Map<String, Double> finalResults = calculator.getFinalResults();
             Map<String, String> beneficiaryPaths = calculator.getBeneficiaryPaths();
             Map<String, Map<String, Double>> originalData = calculator.getOriginalData();
-            
+
+            // LOG: Imprimir todos los nombres en finalResults y su tipo
+            Map<String, String> tiposPreview = calculator.getTiposPorNombre();
+            logger.info("=== NOMBRES EN FINALRESULTS Y SU TIPO ===");
+            for (String name : finalResults.keySet()) {
+                String tipo = tiposPreview.get(name);
+                logger.info("FinalResult: '{}'  Tipo: '{}'", name, tipo);
+            }
+
             resultBuilder
                 .withFinalResults(finalResults)
                 .withBeneficiaryPaths(beneficiaryPaths)
@@ -117,7 +126,8 @@ public class ExcelOwnershipProcessor {
                 rootEntity, 
                 outputPdfPath,
                 originalDataFromFile,
-                dataXlsxRows
+                dataXlsxRows,
+                calculator.getTiposPorNombre()
             );
             
             // Verificar que el PDF se generó correctamente

@@ -41,8 +41,10 @@ class HierarchicalParser:
         self.excel_path = excel_path
         self.wb = None
         self.ws = None
-        self.relationships = []  # Lista de (entidad, accionista, porcentaje)
+        # Lista de (entidad, accionista, porcentaje, tipo_entidad, tipo_accionista)
+        self.relationships = []
         self.root_entity = None
+        self.tipo_col_idx = None
         
     def parse(self):
         """Parsea el archivo Excel jerárquico"""
@@ -52,19 +54,27 @@ class HierarchicalParser:
         
         self.wb = openpyxl.load_workbook(self.excel_path)
         self.ws = self.wb.active
-        
+
+        # Detectar columna "Tipo" (puede estar en cualquier posición)
+        header_row = self.ws[1]
+        self.tipo_col_idx = None
+        for idx, cell in enumerate(header_row, start=1):
+            if cell.value and str(cell.value).strip().lower() == "tipo":
+                self.tipo_col_idx = idx
+                break
+
         # Paso 1: Detectar entidad raíz
         self.root_entity = self._detect_root_entity()
         if not self.root_entity:
             raise ValueError("No se pudo detectar la entidad raíz en el archivo")
-        
+
         print(f"✓ Entidad raíz detectada: {self.root_entity}")
-        
+
         # Paso 2: Parsear jerarquía
         self._parse_hierarchy()
-        
+
         print(f"✓ Relaciones extraídas: {len(self.relationships)}")
-        
+
         return self.relationships
     
     def _detect_root_entity(self):
@@ -125,17 +135,24 @@ class HierarchicalParser:
             cell_a = self.ws.cell(row_idx, 1).value
             cell_b = self.ws.cell(row_idx, 2).value
             cell_c = self.ws.cell(row_idx, 3).value
-            
+
+            # Extraer tipo de entidad y accionista si existe columna "Tipo"
+            tipo_entidad = ""
+            tipo_accionista = ""
+            if self.tipo_col_idx:
+                tipo_entidad = self.ws.cell(row_idx, self.tipo_col_idx).value or ""
+                # El tipo del accionista se buscará en la fila donde ese accionista sea entidad
+
             # Saltar filas vacías o de encabezado
             if not cell_a or not isinstance(cell_a, str):
                 continue
-            
+
             entity_name = cell_a.strip()
-            
+
             # Saltar si parece ser encabezado
             if self._is_header_row(entity_name):
                 continue
-            
+
             # Caso 1: Entidad con porcentaje directo (columna B)
             # → Es un accionista del padre actual
             if cell_b is not None:
@@ -144,18 +161,26 @@ class HierarchicalParser:
                     if percentage > 0:
                         # Determinar el padre
                         parent = current_parent if current_parent else self.root_entity
-                        
+
                         # Evitar relaciones autoreferenciales (entidad propiedad de sí misma)
                         if parent != entity_name:
-                            # Agregar relación
-                            self.relationships.append((parent, entity_name, percentage))
-                            print(f"  {parent} ← {entity_name} ({percentage:.2f}%)")
+                            # Buscar tipo del accionista (si existe en otra fila como entidad)
+                            tipo_accionista = ""
+                            if self.tipo_col_idx:
+                                # Buscar en las primeras 100 filas por eficiencia
+                                for search_row in range(1, min(self.ws.max_row + 1, 100)):
+                                    search_entity = self.ws.cell(search_row, 1).value
+                                    if search_entity and str(search_entity).strip() == entity_name:
+                                        tipo_accionista = self.ws.cell(search_row, self.tipo_col_idx).value or ""
+                                        break
+                            self.relationships.append((parent, entity_name, percentage, tipo_entidad, tipo_accionista))
+                            print(f"  {parent} ← {entity_name} ({percentage:.2f}%) [Tipo entidad: {tipo_entidad}] [Tipo accionista: {tipo_accionista}]")
                         else:
                             print(f"  [Ignorado] Autorreferencia: {entity_name}")
-                        
+
                 except (ValueError, TypeError):
                     pass
-            
+
             # Caso 2: Entidad sin porcentaje directo pero con porcentaje acumulado (columna C)
             # → Se convierte en el nuevo padre para las siguientes filas
             elif cell_c is not None:
@@ -209,34 +234,38 @@ class HierarchicalParser:
         return self._parse_percentage(value)
     
     def save_to_excel(self, output_path):
-        """Guarda las relaciones en formato relacional"""
+        """Guarda las relaciones en formato relacional, incluyendo columna Tipo para entidad y accionista"""
         wb_out = openpyxl.Workbook()
         ws_out = wb_out.active
         ws_out.title = "Datos"
-        
+
         # Header
         ws_out['A1'] = 'Entidad'
         ws_out['B1'] = 'Accionista'
         ws_out['C1'] = '% Participación'
-        
+        ws_out['D1'] = 'Tipo Entidad'
+        ws_out['E1'] = 'Tipo Accionista'
+
         # Aplicar formato
         from openpyxl.styles import Font, PatternFill
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
-        for cell in [ws_out['A1'], ws_out['B1'], ws_out['C1']]:
+        for cell in [ws_out['A1'], ws_out['B1'], ws_out['C1'], ws_out['D1'], ws_out['E1']]:
             cell.font = header_font
             cell.fill = header_fill
-        
+
         # Datos
-        for idx, (entity, shareholder, percentage) in enumerate(self.relationships, start=2):
+        for idx, (entity, shareholder, percentage, tipo_entidad, tipo_accionista) in enumerate(self.relationships, start=2):
             ws_out[f'A{idx}'] = entity
             ws_out[f'B{idx}'] = shareholder
             ws_out[f'C{idx}'] = percentage
-        
+            ws_out[f'D{idx}'] = tipo_entidad
+            ws_out[f'E{idx}'] = tipo_accionista
+
         wb_out.save(output_path)
         print(f"\n✓ Archivo generado: {output_path}")
         print(f"  Relaciones: {len(self.relationships)}")
-        
+
         # Estadísticas
         self._print_statistics()
     

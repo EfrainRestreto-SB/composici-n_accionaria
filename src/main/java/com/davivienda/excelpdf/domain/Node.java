@@ -13,19 +13,45 @@ import java.util.Map;
 public class Node {
     
     private final String name;
+    private String tipo; // "PN" para persona natural, "PJ" para jurídica, etc.
     private final Map<Node, Double> owners = new HashMap<>();
     
     /**
      * Constructor del nodo.
      * 
      * @param name nombre de la entidad que representa este nodo
+     * @param tipo tipo de la entidad ("PN" o "PJ")
      */
-    public Node(String name) {
+    public Node(String name, String tipo) {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("El nombre del nodo no puede estar vacío");
         }
         this.name = name.trim();
+        this.tipo = tipo != null ? tipo.trim() : "";
     }
+
+    /**
+     * Permite actualizar el tipo del nodo si aún no está definido.
+     */
+    public void setTipoIfEmpty(String tipo) {
+        if ((this.tipo == null || this.tipo.isEmpty()) && tipo != null && !tipo.trim().isEmpty()) {
+            this.tipo = tipo.trim();
+        }
+    }
+
+    /**
+     * Constructor alternativo para compatibilidad (tipo vacío)
+     */
+    public Node(String name) {
+        this(name, "");
+    }
+    /**
+     * Obtiene el tipo de la entidad ("PN" o "PJ").
+     */
+    public String getTipo() {
+        return tipo;
+    }
+
     
     /**
      * Agrega un propietario a este nodo con su porcentaje de participación.

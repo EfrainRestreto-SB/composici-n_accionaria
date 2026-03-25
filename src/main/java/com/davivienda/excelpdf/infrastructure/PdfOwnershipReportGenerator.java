@@ -70,7 +70,8 @@ public class PdfOwnershipReportGenerator {
                                       String rootEntity,
                                       String outputPath,
                                       Map<String, Map<String, Double>> originalData,
-                                      java.util.List<String[]> dataXlsxRows) throws IOException {
+                                      java.util.List<String[]> dataXlsxRows,
+                                      Map<String, String> tiposPorNombre) throws IOException {
         
         logger.info("Generando reporte PDF: {}", outputPath);
         
@@ -91,9 +92,9 @@ public class PdfOwnershipReportGenerator {
             
             // Agregar contenido al documento
             addHeader(document, rootEntity);
-            addSummary(document, finalResults);
+            addSummary(document, finalResults, tiposPorNombre);
             addDetailedBreakdown(document, dataXlsxRows);
-            addDetailedResults(document, finalResults, beneficiaryPaths);
+            addDetailedResults(document, finalResults, beneficiaryPaths, tiposPorNombre);
             addFooter(document, writer);
             
             document.close();
@@ -183,7 +184,7 @@ public class PdfOwnershipReportGenerator {
     /**
      * Agrega el resumen ejecutivo.
      */
-    private void addSummary(Document document, Map<String, Double> finalResults) 
+    private void addSummary(Document document, Map<String, Double> finalResults, Map<String, String> tiposPorNombre)
             throws DocumentException {
         
         Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, DAVIVIENDA_RED);
@@ -193,9 +194,25 @@ public class PdfOwnershipReportGenerator {
         
         Font bodyFont = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.BLACK);
         
-        // Número de beneficiarios finales
+        // Número de beneficiarios finales tipo 'PN' y logging detallado
+        java.util.List<String> pnNames = finalResults.keySet().stream()
+            .filter(name -> name != null && name.trim().length() > 0)
+            .filter(name -> {
+                String tipo = tiposPorNombre != null ? tiposPorNombre.get(name) : null;
+                return tipo != null && tipo.equalsIgnoreCase("PN");
+            })
+            .toList();
+        logger.info("Beneficiarios finales tipo PN detectados ({}): {}", pnNames.size(), pnNames);
+        if (pnNames.isEmpty()) {
+            logger.warn("No se detectaron beneficiarios finales tipo PN. Verifique los tipos en el Excel y el procesamiento de nodos.");
+            // Loggear todos los nombres y tipos detectados
+            for (String name : finalResults.keySet()) {
+                String tipo = tiposPorNombre != null ? tiposPorNombre.get(name) : null;
+                logger.info("Nodo en finalResults: '{}' tipo='{}'", name, tipo);
+            }
+        }
         Paragraph beneficiariesCount = new Paragraph(
-            String.format("• Número de beneficiarios finales identificados: %d", finalResults.size()), 
+            String.format("• Número de beneficiarios finales identificados: %d", pnNames.size()), 
             bodyFont
         );
         beneficiariesCount.setSpacingAfter(8);
@@ -233,7 +250,7 @@ public class PdfOwnershipReportGenerator {
      * Agrega la tabla de resultados detallados.
      */
     private void addDetailedResults(Document document, Map<String, Double> finalResults, 
-                                  Map<String, String> beneficiaryPaths) throws DocumentException {
+                                  Map<String, String> beneficiaryPaths, Map<String, String> tiposPorNombre) throws DocumentException {
         
         Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, DAVIVIENDA_RED);
         Paragraph resultsHeader = new Paragraph("RESULTADOS DETALLADOS", headerFont);
@@ -253,36 +270,35 @@ public class PdfOwnershipReportGenerator {
         table.addCell(createHeaderCell("RUTA DE PARTICIPACIÓN", tableHeaderFont));
         
         // Ordenar resultados por porcentaje descendente
-        finalResults.entrySet().stream()
+        java.util.List<Map.Entry<String, Double>> pnEntries = finalResults.entrySet().stream()
+            .filter(entry -> {
+                String tipo = tiposPorNombre != null ? tiposPorNombre.get(entry.getKey()) : null;
+                return tipo != null && tipo.equalsIgnoreCase("PN");
+            })
             .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-            .forEach(entry -> {
-                String beneficiary = entry.getKey();
-                Double percentage = entry.getValue();
-                String path = beneficiaryPaths.getOrDefault(beneficiary, "N/A");
-                
-                Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.BLACK);
-                
-                // Celda de beneficiario
-                PdfPCell cell1 = new PdfPCell(new Phrase(beneficiary, cellFont));
-                cell1.setPadding(6);
-                cell1.setVerticalAlignment(Element.ALIGN_TOP);
-                table.addCell(cell1);
-                
-                // Celda de porcentaje
-                Font percentageFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
-                PdfPCell cell2 = new PdfPCell(new Phrase(PERCENTAGE_FORMAT.format(percentage), percentageFont));
-                cell2.setPadding(6);
-                cell2.setHorizontalAlignment(Element.ALIGN_CENTER);
-                cell2.setVerticalAlignment(Element.ALIGN_TOP);
-                table.addCell(cell2);
-                
-                // Celda de ruta
-                Font pathFont = FontFactory.getFont(FontFactory.HELVETICA, 9, HEADER_GRAY);
-                PdfPCell cell3 = new PdfPCell(new Phrase(path, pathFont));
-                cell3.setPadding(6);
-                cell3.setVerticalAlignment(Element.ALIGN_TOP);
-                table.addCell(cell3);
-            });
+            .toList();
+        logger.info("Entradas de beneficiarios PN para tabla detallada ({}): {}", pnEntries.size(), pnEntries.stream().map(Map.Entry::getKey).toList());
+        for (Map.Entry<String, Double> entry : pnEntries) {
+            String beneficiary = entry.getKey();
+            Double percentage = entry.getValue();
+            String path = beneficiaryPaths.getOrDefault(beneficiary, "N/A");
+            Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.BLACK);
+            PdfPCell cell1 = new PdfPCell(new Phrase(beneficiary, cellFont));
+            cell1.setPadding(6);
+            cell1.setVerticalAlignment(Element.ALIGN_TOP);
+            table.addCell(cell1);
+            Font percentageFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
+            PdfPCell cell2 = new PdfPCell(new Phrase(PERCENTAGE_FORMAT.format(percentage), percentageFont));
+            cell2.setPadding(6);
+            cell2.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell2.setVerticalAlignment(Element.ALIGN_TOP);
+            table.addCell(cell2);
+            Font pathFont = FontFactory.getFont(FontFactory.HELVETICA, 9, HEADER_GRAY);
+            PdfPCell cell3 = new PdfPCell(new Phrase(path, pathFont));
+            cell3.setPadding(6);
+            cell3.setVerticalAlignment(Element.ALIGN_TOP);
+            table.addCell(cell3);
+        }
         
         document.add(table);
     }
